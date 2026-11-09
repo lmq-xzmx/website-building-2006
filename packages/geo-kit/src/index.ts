@@ -149,3 +149,26 @@ export {
   type RetrievalHit,
   type RetrievalOptions,
 } from "./ai/chat.js";
+
+export {
+  validateInquiry,
+  toCrmLead,
+  submitInquiry,
+  inquiryHandlerSource,
+  type InquiryPayload,
+  type CrmConfig,
+  type SubmitResult,
+} from "./integrations/crm.js";
+
+export {
+  buildMcpTools,
+  buildServerInfo,
+  callReadTool,
+  handleMcpRequest,
+  exportMcpManifest,
+  type McpTool,
+  type McpServerInfo,
+  type JsonRpcRequest,
+  type JsonRpcResponse,
+  type ToolCallResult,
+} from "./integrations/mcp.js";

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { site } from "@/content/site";
 import { getSection, pageDescription } from "../geo";
 import InquiryForm from "./inquiry-form";
+import AiAssistant from "./ai-assistant";
 
 export const metadata: Metadata = {
   title: "联系我们",
@@ -81,6 +82,7 @@ export default function ContactPage() {
 
           <div id="inquiry">
             <h2>提交询盘</h2>
+            <AiAssistant />
             <InquiryForm endpoint={contact?.inquiryEndpoint} />
           </div>
         </div>

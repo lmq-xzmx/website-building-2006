@@ -3,32 +3,49 @@
 import { useState } from "react";
 
 /**
- * 询盘表单 —— Phase 3 接 CRM 的前端桩。
+ * 询盘表单 —— 提交到**外部**端点（Phase 3）。
  *
- * 当前实现：提交到配置的 endpoint（默认 /api/inquiry）。
- * Phase 3 落地时，服务端路由把询盘转成 CRM 线索（走 X-API-Key）。
+ * 关键约束：客户站是纯静态的，没有服务端路由。
+ * 所以 endpoint 必须指向外部网关（Vercel Edge / Cloudflare Worker /
+ * 自建转发服务），由它负责转成 CRM 的 GEO Lead。
  *
- * 静态导出下的关键约束：
- *   表单提交**必须**走外部 API —— 纯静态站没有服务端路由。
- *   若部署到静态托管，endpoint 需指向 CRM 网关或 Serverless 函数。
+ * 环境变量 NEXT_PUBLIC_INQUIRY_ENDPOINT 指定目标；
+ * 未配置时降级为 mailto —— 保证表单永远不会「点了没反应」。
  */
+const DEFAULT_ENDPOINT = process.env.NEXT_PUBLIC_INQUIRY_ENDPOINT;
+
 export default function InquiryForm({ endpoint }: { endpoint?: string }) {
   const [status, setStatus] = useState<"idle" | "sending" | "ok" | "error">("idle");
   const [message, setMessage] = useState("");
+  const target = endpoint ?? DEFAULT_ENDPOINT;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setStatus("sending");
-    setMessage("");
-
     const form = e.currentTarget;
     const data = Object.fromEntries(new FormData(form).entries());
 
+    // 未配置外部端点 —— 降级为 mailto，绝不静默失败
+    if (!target) {
+      const subject = encodeURIComponent(`建站询盘 - ${data.company}`);
+      const body = encodeURIComponent(
+        `姓名：${data.name}\n公司：${data.company}\n电话：${data.phone}\n邮箱：${data.email}\n\n需求：${data.message}`,
+      );
+      window.location.href = `mailto:sales@example.com?subject=${subject}&body=${body}`;
+      return;
+    }
+
+    setStatus("sending");
+    setMessage("");
+
     try {
-      const res = await fetch(endpoint ?? "/api/inquiry", {
+      const res = await fetch(target, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          sourceUrl: window.location.href,
+          siteId: process.env.NEXT_PUBLIC_SITE_ID,
+        }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setStatus("ok");

@@ -70,7 +70,10 @@ async function cmdGenerate(args: Args): Promise<void> {
   });
 
   await mkdir(outDir, { recursive: true });
-  const files = artifactsToFiles(artifacts);
+  const files = artifactsToFiles(artifacts, content, {
+    includeKnowledgeBase: Boolean(args.flags["knowledge-base"]),
+    includeMcp: Boolean(args.flags.mcp),
+  });
   for (const [name, body] of Object.entries(files)) {
     const target = resolve(outDir, name);
     await mkdir(dirname(target), { recursive: true });
@@ -439,8 +442,10 @@ async function main(): Promise<void> {
       console.log(`geo-kit —— GEO 建站核心库 CLI
 
 用法：
-  geo-kit generate <content.ts> [--out public] [--full]
+  geo-kit generate <content.ts> [--out public] [--full] [--knowledge-base] [--mcp]
       从内容包生成 robots.txt / llms.txt / sitemap.xml / JSON-LD / 内容索引
+      --knowledge-base 额外生成数字分身知识库（Phase 2）
+      --mcp            额外生成 MCP 静态清单（Phase 3）
 
   geo-kit audit <url> [--content content.ts] [--json] [--full]
       对站点做 GEO 体检。--full 为站级体检（抓全站查跨页问题）
