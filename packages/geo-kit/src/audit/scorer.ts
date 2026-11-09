@@ -12,6 +12,8 @@
  *   - 新增 DimG 可调用性（ADR-002 决策 3）。
  */
 
+import { isAgentGroupDisallowed } from "./robots.js";
+
 export type DimensionKey = "A" | "B" | "C" | "D" | "E" | "F" | "G";
 
 export type CheckStatus = "pass" | "partial" | "fail" | "unknown";
@@ -242,8 +244,15 @@ function scoreDimA(input: AuditInput): Check[] {
       note: trainingDeclared ? "已显式声明" : "未显式声明（依赖默认行为）",
     });
 
-    // 禁止摘要指令会直接损害 GEO
-    const snippetBlocked = /User-agent:\s*nosnippet/i.test(robots);
+    // 禁止摘要指令会直接损害 GEO。
+    //
+    // 判据要精确 —— 不能全文搜 "nosnippet"：
+    // 「User-agent: nosnippet」是合法的 UA 声明（精确匹配携带该指令的爬虫），
+    // 全文匹配会把它误判成「站点禁止了摘要」。真正该判 fail 的是
+    // **该 UA 组里存在 Disallow 规则**，或页面 meta 里声明了 nosnippet。
+    const snippetBlocked =
+      isAgentGroupDisallowed(robots, "nosnippet") ||
+      (input.html ? /<meta[^>]+content=["'][^"']*nosnippet/i.test(input.html) : false);
     checks.push({
       id: "A4",
       name: "未禁止 AI 摘要",
@@ -251,7 +260,7 @@ function scoreDimA(input: AuditInput): Check[] {
       earned: snippetBlocked ? 0 : 4,
       status: snippetBlocked ? "fail" : "pass",
       desc: "未通过 nosnippet 等指令禁止 AI 生成摘要",
-      note: snippetBlocked ? "存在 nosnippet 指令，会阻止 AI 摘要" : "未禁止摘要",
+      note: snippetBlocked ? "存在禁止摘要的规则，会阻止 AI 摘要" : "未禁止摘要",
     });
   }
 

@@ -1,0 +1,99 @@
+# robots.txt —— AI 爬虫策略
+# 由 geo-kit 生成（@geokit/geo-kit）
+#
+# 策略说明：
+#   Search 型   —— 答案引擎检索源，决定是否被引用 → 放行
+#   On-demand 型 —— 用户提问时实时抓取 → 放行
+#   Training 型  —— 仅模型训练，不影响引用 → 放行
+
+# 答案引擎检索源 —— 决定是否被引用
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+User-agent: Sogou web spider
+Allow: /
+
+User-agent: 360Spider
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+# 用户提问时实时抓取
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: meta-externalagent
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: DuckAssistBot
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+# 模型训练 —— 不影响引用
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: AI2Bot
+Allow: /
+
+User-agent: Meta-ExternalFetcher
+Allow: /
+
+# 行为控制指令
+User-agent: nosnippet
+Allow: /
+
+User-agent: max-snippet
+Allow: /
+
+User-agent: claude-web
+Allow: /
+
+# 通用搜索引擎爬虫
+User-agent: *
+Allow: /
+
+Sitemap: https://www.example-tech.com/sitemap.xml
+Sitemap: https://www.example-tech.com/llms.txt

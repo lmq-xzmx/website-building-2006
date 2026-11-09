@@ -1,0 +1,546 @@
+[
+  {
+    "type": "Organization",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "示例科技有限公司",
+      "url": "https://www.example-tech.com",
+      "legalName": "示例科技股份有限公司",
+      "description": "专注工业物联网设备研发与制造的科技企业，产品覆盖数据采集器、边缘网关与设备管理平台。",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.example-tech.com/assets/logo.svg"
+      },
+      "foundingDate": "2015-06-18",
+      "industry": "Industrial IoT",
+      "numberOfEmployees": {
+        "@type": "QuantitativeValue",
+        "value": "51-200"
+      },
+      "taxID": "91310000MA1K3XXXXX",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "张江高科技园区博云路 2 号 5 楼",
+        "addressLocality": "上海市",
+        "addressRegion": "上海市",
+        "postalCode": "201203",
+        "addressCountry": "CN"
+      },
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "sales",
+        "telephone": "+86-21-5000-0000",
+        "email": "sales@example-tech.com",
+        "availableLanguage": [
+          "zh-CN",
+          "en"
+        ],
+        "areaServed": "CN"
+      },
+      "sameAs": [
+        "https://github.com/example-tech",
+        "https://www.zhihu.com/org/example-tech",
+        "https://www.linkedin.com/company/example-tech"
+      ]
+    },
+    "target": "head"
+  },
+  {
+    "type": "WebSite",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "示例科技有限公司",
+      "url": "https://www.example-tech.com",
+      "inLanguage": "zh-CN",
+      "description": "示例科技有限公司专注工业物联网设备研发与制造，为制造业客户提供设备联网、数据采集与远程运维一体化方案，已服务 320 家制造企业。",
+      "logo": "https://www.example-tech.com/assets/logo.svg"
+    },
+    "target": "head"
+  },
+  {
+    "type": "WebPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "工业物联网设备与平台",
+      "url": "https://www.example-tech.com/",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "示例科技有限公司",
+        "url": "https://www.example-tech.com"
+      },
+      "description": "示例科技为制造业客户提供设备联网、数据采集与远程运维的一体化方案，已服务 320 家制造企业，覆盖 26 个省份。"
+    },
+    "target": "head"
+  },
+  {
+    "type": "CollectionPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      "name": "产品与参数",
+      "url": "https://www.example-tech.com/products",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "示例科技有限公司",
+        "url": "https://www.example-tech.com"
+      },
+      "description": "以下为在售产品的完整技术参数。所有参数均来自实测报告，测试条件为 25℃ 恒定环境下的连续运行 72 小时。",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "示例科技有限公司",
+            "item": "https://www.example-tech.com"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "产品与参数",
+            "item": "https://www.example-tech.com/products"
+          }
+        ]
+      }
+    },
+    "target": "head"
+  },
+  {
+    "type": "CollectionPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      "name": "客户案例",
+      "url": "https://www.example-tech.com/cases",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "示例科技有限公司",
+        "url": "https://www.example-tech.com"
+      },
+      "description": "以下案例均来自客户授权披露，量化结果取自上线前后的同口径统计对比。",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "示例科技有限公司",
+            "item": "https://www.example-tech.com"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "客户案例",
+            "item": "https://www.example-tech.com/cases"
+          }
+        ]
+      }
+    },
+    "target": "head"
+  },
+  {
+    "type": "BlogPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "BlogPage",
+      "name": "洞察与文章",
+      "url": "https://www.example-tech.com/insights",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "示例科技有限公司",
+        "url": "https://www.example-tech.com"
+      },
+      "description": "关于工业物联网选型、部署与运维的实践记录，每篇均来自真实项目复盘。",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "示例科技有限公司",
+            "item": "https://www.example-tech.com"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "洞察与文章",
+            "item": "https://www.example-tech.com/insights"
+          }
+        ]
+      }
+    },
+    "target": "head"
+  },
+  {
+    "type": "AboutPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "AboutPage",
+      "name": "关于示例科技",
+      "url": "https://www.example-tech.com/about",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "示例科技有限公司",
+        "url": "https://www.example-tech.com"
+      },
+      "description": "成立于 2015 年的工业物联网设备制造商，核心团队来自精密仪器与汽车电子行业，平均从业年限 11 年。",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "示例科技有限公司",
+            "item": "https://www.example-tech.com"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "关于示例科技",
+            "item": "https://www.example-tech.com/about"
+          }
+        ]
+      }
+    },
+    "target": "head"
+  },
+  {
+    "type": "WebPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "常见问题",
+      "url": "https://www.example-tech.com/faq",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "示例科技有限公司",
+        "url": "https://www.example-tech.com"
+      },
+      "description": "以下是我们被问得最多的 6 个问题。",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "示例科技有限公司",
+            "item": "https://www.example-tech.com"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "常见问题",
+            "item": "https://www.example-tech.com/faq"
+          }
+        ]
+      }
+    },
+    "target": "head"
+  },
+  {
+    "type": "ContactPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "ContactPage",
+      "name": "联系我们",
+      "url": "https://www.example-tech.com/contact",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "示例科技有限公司",
+        "url": "https://www.example-tech.com"
+      },
+      "description": "填写需求后，销售工程师将在 1 个工作日内与您联系，并提供选型建议与报价。",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "示例科技有限公司",
+            "item": "https://www.example-tech.com"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "联系我们",
+            "item": "https://www.example-tech.com/contact"
+          }
+        ]
+      }
+    },
+    "target": "head"
+  },
+  {
+    "type": "FAQPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "url": "https://www.example-tech.com/faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "最小起订量是多少？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "标准产品线最小起订量为 10 台，单台即可购买样机。定制开发项目最小起订量为 50 台。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "从下单到交付需要多长时间？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "标准型号备货充足，下单后 3 个工作日内发货。定制型号交期为 25 至 40 个工作日，取决于硬件改版与认证进度。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "支持哪些工业协议？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "标准固件支持 Modbus RTU/TCP、OPC UA、Profinet、Modbus RTU over Serial 四类协议。第三方协议可通过 SDK 扩展，通常需要 5 个工作日。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "能否对接客户已有的 MES 或 ERP 系统？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "可以。DM 管理平台提供 RESTful API 与 Kafka 消息队列两种对接方式，已预置 SAP、Oracle、用友、金蝶四套标准连接器。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "设备的质保期与售后响应是什么？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "标准型号质保 3 年，定制型号质保 2 年。华东地区承诺 4 小时到场，远程支持在 30 分钟内响应。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "是否支持私有化部署？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "支持。DM 管理平台提供私有化部署包，支持单机与三节点高可用两种拓扑，授权按节点数计费。"
+          }
+        }
+      ]
+    },
+    "target": "body"
+  },
+  {
+    "type": "Product",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "EG-200 边缘网关",
+      "description": "EG-200 部署在产线侧工控机柜内，通过以太网或 RS-485 接入现场设备，将 Modbus、OPC UA、Profinet 三类协议的数据汇聚后上送至 DM 管理平台。设备采用 -20℃ 至 65℃ 宽温设计，无风扇结构，支持 DIN 导轨与壁挂两种安装方式。",
+      "image": "https://www.example-tech.com/assets/eg-200.svg",
+      "category": "边缘网关",
+      "additionalProperty": [
+        {
+          "@type": "PropertyValue",
+          "name": "并发采集数据点",
+          "value": "48000"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "协议支持",
+          "value": "Modbus RTU/TCP、OPC UA、Profinet"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "存储容量",
+          "value": "128 GB"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "工作温度",
+          "value": "-20 ~ 65 ℃"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "供电方式",
+          "value": "DC 9~36V"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "防护等级",
+          "value": "IP40"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "平均无故障时间",
+          "value": "80000 小时"
+        }
+      ],
+      "model": "EG-200, EG-200S, EG-200T",
+      "brand": {
+        "@type": "Brand",
+        "name": "示例科技有限公司"
+      },
+      "manufacturer": {
+        "@type": "Organization",
+        "name": "示例科技有限公司",
+        "url": "https://www.example-tech.com"
+      }
+    },
+    "target": "body"
+  },
+  {
+    "type": "Product",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "DA-100 数据采集器",
+      "description": "DA-100 用于单台设备的轻量数据采集，支持 8 路数字量输入与 4 路模拟量输入，通过 RS-485 总线级联最多 32 台，适用于老旧产线的低成本改造。",
+      "image": "https://www.example-tech.com/assets/da-100.svg",
+      "category": "数据采集器",
+      "additionalProperty": [
+        {
+          "@type": "PropertyValue",
+          "name": "数字量输入",
+          "value": "8 路"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "模拟量输入",
+          "value": "4 路"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "级联数量",
+          "value": "32 台"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "采样精度",
+          "value": "16 bit"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "工作温度",
+          "value": "-10 ~ 55 ℃"
+        }
+      ],
+      "model": "DA-100, DA-100P",
+      "brand": {
+        "@type": "Brand",
+        "name": "示例科技有限公司"
+      },
+      "manufacturer": {
+        "@type": "Organization",
+        "name": "示例科技有限公司",
+        "url": "https://www.example-tech.com"
+      }
+    },
+    "target": "body"
+  },
+  {
+    "type": "Product",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "DM 设备管理平台",
+      "description": "DM 平台提供设备台账、远程参数下发、固件升级、异常告警与数据分析五大能力，支持单机与三节点高可用两种部署拓扑，可完全私有化部署在客户内网。",
+      "image": "https://www.example-tech.com/assets/dm-cloud.svg",
+      "category": "管理平台",
+      "additionalProperty": [
+        {
+          "@type": "PropertyValue",
+          "name": "单机管理设备数",
+          "value": "20000 台"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "部署拓扑",
+          "value": "单机 / 三节点高可用"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "私有化支持",
+          "value": "支持"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "标准连接器",
+          "value": "SAP、Oracle、用友、金蝶"
+        }
+      ],
+      "model": "DM-Standard, DM-HA",
+      "brand": {
+        "@type": "Brand",
+        "name": "示例科技有限公司"
+      },
+      "manufacturer": {
+        "@type": "Organization",
+        "name": "示例科技有限公司",
+        "url": "https://www.example-tech.com"
+      }
+    },
+    "target": "body"
+  },
+  {
+    "type": "BlogPosting",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": "工业现场协议选型的 5 个常见误区",
+      "url": "https://www.example-tech.com/insights/proto-cols-in-plant",
+      "inLanguage": "zh-CN",
+      "publisher": {
+        "@type": "Organization",
+        "name": "示例科技有限公司",
+        "url": "https://www.example-tech.com"
+      },
+      "description": "很多项目在协议选型阶段就埋下隐患。本文基于 68 个工业物联网项目的部署复盘，总结 5 个高代价的常见误区。",
+      "datePublished": "2026-09-12",
+      "dateModified": "2026-09-12",
+      "author": {
+        "@type": "Person",
+        "name": "技术负责人 张工"
+      },
+      "keywords": "协议选型, 项目复盘, 工业物联网",
+      "timeRequired": "PT8M",
+      "articleBody": "在 68 个已交付项目中，我们统计到 41 个项目在协议选型阶段出现过返工，平均返工成本约为项目总额的 8%。\n\n最常见的误区是按设备说明书标称的协议选型，而不考虑实际现场的总线拓扑与终端电阻配置。\n\n第二个误区是忽略协议网关的转发延迟。在 1000 点规模下，未经优化的串行级联方案端到端延迟可达 3 秒。"
+    },
+    "target": "body"
+  },
+  {
+    "type": "BlogPosting",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": "OTA 固件升级失败回滚：把 3 小时停机降到 0",
+      "url": "https://www.example-tech.com/insights/device-firmware-rollback",
+      "inLanguage": "zh-CN",
+      "publisher": {
+        "@type": "Organization",
+        "name": "示例科技有限公司",
+        "url": "https://www.example-tech.com"
+      },
+      "description": "工业设备的远程升级一旦失败，停机代价极高。本文介绍我们实现双分区固件与自动回滚的完整方案与实测数据。",
+      "datePublished": "2026-10-08",
+      "dateModified": "2026-10-08",
+      "author": {
+        "@type": "Person",
+        "name": "固件组 李工"
+      },
+      "keywords": "OTA, 固件升级, 可靠性",
+      "timeRequired": "PT11M",
+      "articleBody": "我们对 320 台在线设备做过统计，未实现回滚机制时升级失败率约为 4.2%，其中 73% 会导致设备完全离线。\n\n采用 A/B 双分区与健康检查确认机制后，升级失败率降至 0.3%，且失败设备可在 90 秒内自动回滚到上一稳定版本。\n\n实现要点包括：固件包签名校验、升级前状态快照、升级后 5 分钟健康检查窗口，以及失败时的强制回滚。"
+    },
+    "target": "body"
+  }
+]
