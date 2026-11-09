@@ -81,6 +81,8 @@ export {
   diagnose,
   renderReport,
   evaluateCrawlerAllowed,
+  isAgentGroupDisallowed,
+  parseRobotsGroups,
   DIMENSIONS,
   getGrade,
   type AuditInput,
@@ -95,6 +97,23 @@ export {
   type ScoreResult,
   type Recommendation,
 } from "./audit/index.js";
+
+export {
+  auditSiteLevel,
+  findOrphanPages,
+  combineResults,
+  type SiteAuditInput,
+  type SiteAuditResult,
+  type SitePageAudit,
+} from "./audit/site.js";
+
+export {
+  crawlSite,
+  parseSitemapUrls,
+  extractPageFacts,
+  contentSitemap,
+  type CrawlOptions,
+} from "./audit/crawl.js";
 
 export { generateArtifacts } from "./artifacts.js";
 export type { GenerateOptions } from "./artifacts.js";

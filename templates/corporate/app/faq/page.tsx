@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 
 import { site } from "@/content/site";
-import { getSection } from "../geo";
+import { getSection, pageDescription } from "../geo";
 import { FaqList } from "../page";
 
 export const metadata: Metadata = {
   title: "常见问题",
+  description: pageDescription("faq"),
   alternates: { canonical: "/faq/" },
 };
 

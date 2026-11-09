@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { site } from "@/content/site";
-import { getSection } from "../geo";
+import { getSection, pageDescription } from "../geo";
 
 export const metadata: Metadata = {
   title: "洞察与文章",
+  description: pageDescription("insights"),
   alternates: { canonical: "/insights/" },
 };
 

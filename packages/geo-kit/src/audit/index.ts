@@ -286,7 +286,10 @@ export function diagnose(input: AuditInput, content?: SiteContent): RootCauseIte
 
   // 元信息
   if (input.html) {
-    if (!/<link[^>]+rel=["']canonical["']/i.test(input.html)) {
+    const hasCanonical =
+      /<link[^>]+rel=["']canonical["']/i.test(input.html) ||
+      /<link[^>]+href=["'][^"']*["'][^>]*rel=["']canonical["']/i.test(input.html);
+    if (!hasCanonical) {
       causes.push({
         cause: "no_canonical",
         title: "缺少 canonical",
@@ -295,9 +298,9 @@ export function diagnose(input: AuditInput, content?: SiteContent): RootCauseIte
         severity: "info",
       });
     }
-    const descMatch = input.html.match(
-      /<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i,
-    );
+    const descMatch =
+      input.html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i) ??
+      input.html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i);
     if (!descMatch || !descMatch[1].trim()) {
       causes.push({
         cause: "no_meta_description",

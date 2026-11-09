@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 
 import { site } from "@/content/site";
-import { getSection } from "../geo";
+import { getSection, pageDescription } from "../geo";
 import InquiryForm from "./inquiry-form";
 
 export const metadata: Metadata = {
   title: "联系我们",
+  description: pageDescription("contact"),
   alternates: { canonical: "/contact/" },
 };
 

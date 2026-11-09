@@ -16,6 +16,9 @@ import { getSection } from "./geo";
 
 export const metadata: Metadata = {
   title: `${site.name} | ${site.organization.industry ?? "工业物联网"}`,
+  // 每页必须有**自己的** description —— 多页共用一份会让 AI 无法区分页面实体，
+  // 这是 GEO 体检 E3 检查项要抓的问题。
+  description: getSection("home")?.subtitle ?? site.description,
   alternates: { canonical: "/" },
 };
 

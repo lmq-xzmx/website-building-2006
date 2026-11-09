@@ -578,9 +578,10 @@ function scoreDimE(input: AuditInput): Check[] {
     note: hasTitle ? `标题长度 ${titleLen} 字符` : "缺少 title 标签",
   });
 
-  const descMatch = html.match(
-    /<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i,
-  );
+  // 属性顺序不固定 —— 两种写法都要匹配，否则误报「缺少 description」
+  const descMatch =
+    html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i) ??
+    html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i);
   const descLen = descMatch ? descMatch[1].trim().length : 0;
   // GEORank 的中文实践：150–160 字符
   const descOk = descLen >= 70 && descLen <= 170;
@@ -595,7 +596,9 @@ function scoreDimE(input: AuditInput): Check[] {
     note: descLen === 0 ? "缺少 meta description" : `长度 ${descLen} 字符`,
   });
 
-  const hasCanonical = /<link[^>]+rel=["']canonical["']/i.test(html);
+  const hasCanonical =
+    /<link[^>]+rel=["']canonical["']/i.test(html) ||
+    /<link[^>]+href=["'][^"']*["'][^>]*rel=["']canonical["']/i.test(html);
   checks.push({
     id: "E3",
     name: "canonical 链接",

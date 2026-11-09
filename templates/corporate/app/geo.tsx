@@ -44,6 +44,28 @@ export function getSection(id: string) {
   return site.sections.find((s) => s.id === id);
 }
 
+/**
+ * 按页型取该页的 meta description。
+ *
+ * 为什么要这个：layout 的 metadata.description 是**站点级**默认值，
+ * 所有页面会共用同一份 —— AI 无法区分页面实体（体检 E3 会报「描述重复」）。
+ * 正确做法是每页用自己的定位语。
+ *
+ * 描述来源优先级：区块 subtitle → 区块正文首句 → 站点描述。
+ */
+export function pageDescription(type: string): string {
+  const section = site.sections.find((s) => s.type === type);
+  if (section?.subtitle) return section.subtitle;
+
+  const firstBody = section?.body?.find((b) => b.trim().length > 0);
+  if (firstBody) {
+    const t = firstBody.trim();
+    return t.length > 170 ? `${t.slice(0, 167)}...` : t;
+  }
+
+  return site.description;
+}
+
 /** 站点元信息 */
 export const siteMeta = {
   name: site.name,

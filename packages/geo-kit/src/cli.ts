@@ -101,13 +101,23 @@ async function cmdGenerate(args: Args): Promise<void> {
 async function cmdAudit(args: Args): Promise<void> {
   const url = args.positional[0];
   if (!url) {
-    console.error("用法：geo-kit audit <url> [--content content.ts] [--json]");
+    console.error("用法：geo-kit audit <url> [--content content.ts] [--json] [--full]");
     process.exit(1);
   }
 
   const content = args.flags.content
     ? await loadContent(args.flags.content as string)
     : undefined;
+
+  // --full：站级体检 —— 抓取全站页面并做跨页检查
+  if (args.flags.full) {
+    if (!content) {
+      console.error("--full 需要 --content（站级检查要与内容包交叉验证）");
+      process.exit(1);
+    }
+    await cmdAuditFull(url, content, args);
+    return;
+  }
 
   const report = await auditSite(url, content);
 
@@ -121,6 +131,172 @@ async function cmdAudit(args: Args): Promise<void> {
   // 有 critical 根因时以非零码退出 —— 便于 CI 阻断
   const hasCritical = report.rootCauses.some((c) => c.severity === "critical");
   process.exit(hasCritical ? 1 : 0);
+}
+
+/** 站级体检（--full） */
+async function cmdAuditFull(
+  url: string,
+  content: SiteContent,
+  args: Args,
+): Promise<void> {
+  const { crawlSite } = await import("./audit/crawl.js");
+  const { auditSiteLevel, combineResults, findOrphanPages } = await import(
+    "./audit/site.js"
+  );
+  const { scoreAudit } = await import("./audit/scorer.js");
+  const { buildContentIndex } = await import("./content-index.js");
+  const { evaluateCrawlerAllowed } = await import("./audit/robots.js");
+  const { AI_CRAWLERS } = await import("./crawlers.js");
+
+  const base = url.replace(/\/+$/, "");
+  const index = buildContentIndex(content);
+
+  const log = args.flags.json
+    ? (m: string) => console.error(m)
+    : (m: string) => console.log(m);
+  log(`抓取全站：${base}`);
+  const { pages, linkGraph } = await crawlSite(base, content);
+
+  // 拿首页与 robots 做单页体检
+  const homePage = pages.find((p) => p.url.endsWith("/")) ?? pages[0];
+  const robotsTxt = await fetchText(`${base}/robots.txt`);
+  const llmsTxt = await fetchText(`${base}/llms.txt`);
+
+  const crawlerAllowed: Record<string, boolean> = {};
+  if (robotsTxt) {
+    for (const c of AI_CRAWLERS) {
+      crawlerAllowed[c.ua] = evaluateCrawlerAllowed(robotsTxt, c.ua);
+    }
+  }
+
+  const html = homePage ? await fetchText(homePage.url) : undefined;
+  const jsonLd: unknown[] = [];
+  if (html) {
+    const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      try {
+        jsonLd.push(JSON.parse(m[1]));
+      } catch {
+        /* 损坏的 JSON-LD 由单页体检报出 */
+      }
+    }
+  }
+
+  const pageResult = scoreAudit({
+    url: base,
+    robotsTxt,
+    llmsTxt,
+    html,
+    jsonLd,
+    index: {
+      entries: index.entries.map((e) => ({
+        sectionId: e.sectionId,
+        title: e.title,
+        description: e.description,
+        url: e.url,
+        category: e.category,
+        quotable: e.quotable,
+        hasFaq: e.hasFaq,
+      })),
+      capabilities: index.capabilities,
+    },
+    locale: content.locale,
+    expectedSchemaTypes: expectedSchemaTypesOf(content),
+    crawlerAllowed,
+  });
+
+  const siteResult = auditSiteLevel({ content, pages, index });
+  const orphans = findOrphanPages(linkGraph, `${base}/`);
+
+  const combined = combineResults([pageResult], siteResult);
+
+  if (args.flags.json) {
+    console.log(
+      JSON.stringify(
+        { pages, siteResult, orphans, combined },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  console.log(`\nGEO 站级体检报告 — ${base}`);
+  console.log(`评分：${combined.score}/100（等级 ${combined.grade}）`);
+  console.log(`抓取页面：${pages.length}\n`);
+
+  console.log("维度得分：");
+  for (const d of combined.dimensions) {
+    const bar = "█".repeat(Math.round(d.score / 10)).padEnd(10, "░");
+    console.log(
+      `  ${d.key} ${d.name.padEnd(12, "　")} ${bar} ${String(d.score).padStart(3)}%`,
+    );
+  }
+
+  console.log("\n站级检查项：");
+  for (const c of siteResult.checks) {
+    const mark =
+      c.status === "pass" ? "✓" : c.status === "partial" ? "~" : c.status === "unknown" ? "?" : "✗";
+    console.log(`  ${mark} [${c.dimension}] ${c.name} —— ${c.note ?? ""}`);
+  }
+
+  if (orphans.length > 0) {
+    console.log(`\n孤立页面（无任何页面链接到，AI 难以发现）：`);
+    for (const o of orphans.slice(0, 10)) console.log(`  · ${o}`);
+  }
+
+  if (combined.recommendations.length > 0) {
+    console.log("\n修复建议（按影响排序）：");
+    for (const r of combined.recommendations.slice(0, 12)) {
+      console.log(`  [${r.dimension}] ${r.message}（缺口 ${r.impact.toFixed(1)}）`);
+    }
+  }
+
+  const hasCritical = siteResult.checks.some(
+    (c) => c.status === "fail" && c.weight - c.earned >= 2,
+  );
+  process.exit(hasCritical ? 1 : 0);
+}
+
+async function fetchText(url: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "GeoKit-Audit/0.1" },
+    });
+    if (!res.ok) return undefined;
+    return await res.text();
+  } catch {
+    return undefined;
+  }
+}
+
+function expectedSchemaTypesOf(content: SiteContent): string[] {
+  const types = new Set<string>(["Organization", "WebSite"]);
+  for (const s of content.sections) {
+    switch (s.type) {
+      case "about":
+        types.add("AboutPage");
+        break;
+      case "contact":
+        types.add("ContactPage");
+        break;
+      case "products":
+      case "cases":
+        types.add("CollectionPage");
+        break;
+      case "insights":
+        types.add("BlogPage");
+        break;
+      default:
+        types.add("WebPage");
+    }
+  }
+  if (content.faq?.length) types.add("FAQPage");
+  if (content.sections.some((s) => s.faq?.length)) types.add("FAQPage");
+  if (content.products?.length) types.add("Product");
+  if (content.insights?.length) types.add("BlogPosting");
+  return [...types];
 }
 
 async function main(): Promise<void> {
