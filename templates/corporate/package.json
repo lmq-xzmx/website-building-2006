@@ -10,10 +10,9 @@
     "start": "next start -p 5101",
     "export": "next build && node scripts/export-static.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
     "lint": "next lint",
-    "geo:generate": "node --experimental-strip-types ../../packages/geo-kit/src/cli.ts generate content/site.ts --out public --full",
-    "geo:audit": "node --experimental-strip-types ../../packages/geo-kit/src/cli.ts audit http://localhost:5101 --content content/site.ts"
+    "geo:generate": "node ../../packages/geo-kit/dist/cli.js generate content/site.ts --out public --full",
+    "geo:audit": "node ../../packages/geo-kit/dist/cli.js audit http://localhost:5101 --content content/site.ts"
   },
   "dependencies": {
     "@geokit/geo-kit": "workspace:*",
@@ -25,7 +24,6 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "typescript": "^5.7.2"
   }
 }
