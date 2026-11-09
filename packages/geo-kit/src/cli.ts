@@ -299,6 +299,127 @@ function expectedSchemaTypesOf(content: SiteContent): string[] {
   return [...types];
 }
 
+async function cmdCopy(args: Args): Promise<void> {
+  const contentPath = args.positional[0];
+  if (!contentPath) {
+    console.error("用法：geo-kit copy <content.ts> [--out content/copy.ts] [--sections a,b]");
+    process.exit(1);
+  }
+
+  const content = await loadContent(contentPath);
+  const { generateCopy, applyDrafts, llmConfigFromEnv } = await import("./ai/copywriter.js");
+  const { INDUSTRY_PACKS, getIndustryPack } = await import("./content-pack.js");
+
+  const llm = llmConfigFromEnv();
+  if (!llm) {
+    console.error(
+      "未配置 LLM。需要环境变量 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL" +
+        "（或 MINIMAX_BASE_URL / MINIMAX_API_KEY / MINIMAX_MODEL）。",
+    );
+    process.exit(1);
+  }
+
+  // 行业包（可选）
+  const packId = args.flags.industry as string | undefined;
+  const pack = packId ? getIndustryPack(packId) ?? INDUSTRY_PACKS[0] : undefined;
+
+  const sectionIds = args.flags.sections
+    ? String(args.flags.sections).split(",").map((s) => s.trim())
+    : undefined;
+
+  console.log(`生成文案初稿（模型 ${llm.model}）…`);
+  const drafts = await generateCopy(content, {
+    sectionIds,
+    llm,
+    writingHints: pack?.writingHints,
+    terminology: pack?.terminology,
+  });
+
+  const okCount = drafts.filter((d) => d.ok).length;
+  console.log(`\n成功 ${okCount}/${drafts.length}`);
+
+  const outPath = resolve((args.flags.out as string) ?? "content/copy.ts");
+  const merged = applyDrafts(content, drafts);
+
+  // 输出为 TS 模块 —— 人工核对后替换原内容包
+  const ts = `/**
+ * AI 生成的文案初稿 —— ${new Date().toISOString()}
+ *
+ * 生成模型：${llm.model}
+ * 成功区块：${okCount}/${drafts.length}
+ *
+ * ⚠️ 必须人工核对后再上线：数字、案例、客户名称、资质编号不可直接采信。
+ * 生成模型被明确要求「不知道就留空」，但仍需复核。
+ *
+ * 用法：核对后把 content/site.ts 的 sections 替换为这里的 sections。
+ */
+
+import type { SiteContent } from "@geokit/geo-kit";
+
+export const draft: SiteContent = ${JSON.stringify(merged, null, 2)} as SiteContent;
+
+export default draft;
+`;
+  await writeFile(outPath, ts, "utf8");
+  console.log(`写入 ${outPath}`);
+}
+
+async function cmdAsk(args: Args): Promise<void> {
+  const contentPath = args.positional[0];
+  const question = args.positional.slice(1).join(" ");
+  if (!contentPath || !question) {
+    console.error("用法：geo-kit ask <content.ts> <问题>");
+    process.exit(1);
+  }
+
+  const content = await loadContent(contentPath);
+  const { buildKnowledgeBase, retrieve, buildChatPrompt } = await import("./ai/chat.js");
+  const { llmConfigFromEnv } = await import("./ai/copywriter.js");
+
+  const docs = buildKnowledgeBase(content);
+  const hits = retrieve(docs, question);
+
+  console.log(`检索命中 ${hits.length} 条：`);
+  for (const [i, h] of hits.entries()) {
+    console.log(`  [${i + 1}] ${h.doc.title}（${h.doc.kind}）score=${h.score.toFixed(2)}`);
+  }
+
+  const cfg = llmConfigFromEnv();
+  if (!cfg) {
+    console.log("\n（未配置 LLM，仅输出检索结果与提示词预览）");
+    console.log("\n" + buildChatPrompt(question, hits, content).slice(0, 800));
+    return;
+  }
+
+  const prompt = buildChatPrompt(question, hits, content);
+  const res = await fetch(`${cfg.baseUrl.replace(/\/+$/, "")}/v1/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": cfg.apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: cfg.model,
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!res.ok) {
+    console.error(`LLM HTTP ${res.status}`);
+    process.exit(1);
+  }
+
+  const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+  const answer = (data.content ?? [])
+    .filter((c) => c.type === "text")
+    .map((c) => c.text ?? "")
+    .join("");
+
+  console.log(`\n回答：\n${answer}`);
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   switch (args.command) {
@@ -308,6 +429,12 @@ async function main(): Promise<void> {
     case "audit":
       await cmdAudit(args);
       break;
+    case "copy":
+      await cmdCopy(args);
+      break;
+    case "ask":
+      await cmdAsk(args);
+      break;
     default:
       console.log(`geo-kit —— GEO 建站核心库 CLI
 
@@ -315,8 +442,14 @@ async function main(): Promise<void> {
   geo-kit generate <content.ts> [--out public] [--full]
       从内容包生成 robots.txt / llms.txt / sitemap.xml / JSON-LD / 内容索引
 
-  geo-kit audit <url> [--content content.ts] [--json]
-      对站点做 GEO 体检，输出维度得分与根因诊断
+  geo-kit audit <url> [--content content.ts] [--json] [--full]
+      对站点做 GEO 体检。--full 为站级体检（抓全站查跨页问题）
+
+  geo-kit copy <content.ts> [--out content/copy.ts] [--industry <id>]
+      用 AI 生成符合 GEO 写作规则的文案初稿
+
+  geo-kit ask <content.ts> <问题>
+      用站内知识库检索并回答（数字分身的知识库侧）
 `);
   }
 }

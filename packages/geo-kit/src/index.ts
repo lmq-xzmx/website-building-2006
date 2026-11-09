@@ -125,3 +125,27 @@ export {
   terminologyCoverage,
 } from "./content-pack.js";
 export type { IndustryPack } from "./content-pack.js";
+
+export {
+  generateSectionCopy,
+  generateCopy,
+  applyDrafts,
+  parseLlmJson,
+  llmConfigFromEnv,
+  GEO_WRITING_RULES,
+  type LlmConfig,
+  type CopyOptions,
+  type SectionDraft,
+} from "./ai/copywriter.js";
+
+export {
+  buildKnowledgeBase,
+  retrieve,
+  buildChatPrompt,
+  answerQuestion,
+  exportKnowledgeBase,
+  extractKeywords,
+  type KnowledgeDoc,
+  type RetrievalHit,
+  type RetrievalOptions,
+} from "./ai/chat.js";
