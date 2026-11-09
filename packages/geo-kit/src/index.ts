@@ -1,0 +1,100 @@
+/**
+ * geo-kit —— GEO 建站核心库（框架无关）。
+ *
+ * 导出面刻意收窄：只暴露**跨层共享**的东西。
+ * 内部实现细节（如章节路径推导）不外泄，避免模板层依赖实现。
+ */
+
+export type {
+  // 内容包
+  SiteContent,
+  OrganizationContent,
+  SectionContent,
+  SectionType,
+  ProductContent,
+  ProductSpec,
+  CaseContent,
+  InsightContent,
+  FaqItem,
+  NavItem,
+  SocialLink,
+  ContactContent,
+  ContactPoint,
+  PostalAddress,
+  AssetContent,
+  CtaContent,
+  SchemaType,
+  Platform,
+  SiteLocale,
+  // 产物
+  SiteArtifacts,
+  JsonLdScript,
+  ContentIndex,
+  IndexEntry,
+  QuotableSignals,
+  Capability,
+} from "./types.js";
+
+export {
+  buildContentIndex,
+  extractQuotableSignals,
+  sectionPath,
+  sectionCategory,
+  absoluteUrl,
+  groupIndexByCategory,
+} from "./content-index.js";
+
+export {
+  generateJsonLd,
+  renderJsonLdScript,
+  renderJsonLdScripts,
+  validateJsonLd,
+  expectedSchemaTypes,
+  siteRoutes,
+  buildSitemap,
+} from "./jsonld.js";
+
+export {
+  generateLlmsTxt,
+  generateLlmsFullTxt,
+  generateLlmsArtifacts,
+  parseLlmsTxt,
+  MAX_URLS_PER_SECTION,
+  LLMS_FULL_MAX_CHARS,
+  type LlmsTxtOptions,
+} from "./llms-txt.js";
+
+export {
+  AI_CRAWLERS,
+  DEFAULT_CRAWLER_POLICY,
+  generateRobotsTxt,
+  isCrawlerAllowed,
+  crawlersByType,
+  type CrawlerSpec,
+  type CrawlerType,
+  type CrawlerPolicy,
+} from "./crawlers.js";
+
+export {
+  auditSite,
+  scoreAudit,
+  diagnose,
+  renderReport,
+  evaluateCrawlerAllowed,
+  DIMENSIONS,
+  getGrade,
+  type AuditInput,
+  type AuditOptions,
+  type AuditReport,
+  type Dimension,
+  type DimensionKey,
+  type Check,
+  type CheckStatus,
+  type RootCause,
+  type RootCauseItem,
+  type ScoreResult,
+  type Recommendation,
+} from "./audit/index.js";
+
+export { generateArtifacts } from "./artifacts.js";
+export type { GenerateOptions } from "./artifacts.js";

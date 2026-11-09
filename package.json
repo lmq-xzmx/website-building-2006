@@ -1,0 +1,30 @@
+{
+  "name": "website-building",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "智能 GEO 建站 —— 为千行万业客户构建 AI 引擎友好的企业站点",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "dev:kit": "pnpm --filter @geokit/geo-kit dev",
+    "dev:site": "pnpm --filter @geokit/site-corporate dev",
+    "build:site": "pnpm --filter @geokit/site-corporate build",
+    "audit": "pnpm --filter @geokit/geo-kit audit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
