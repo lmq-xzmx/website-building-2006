@@ -1,0 +1,20 @@
+# 参考仓库（外部项目的 clone，仅供方法论查阅，不进产品代码、不提交）
+reference/
+
+# 依赖与构建产物
+node_modules/
+.next/
+out/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# 环境与密钥
+.env
+.env.local
+.env.*.local
+
+# 运行时
+logs/
+*.log
+.DS_Store
