@@ -1,0 +1,223 @@
+{
+  "siteId": "demo-saas",
+  "url": "https://www.yunshu-tech.com",
+  "entries": [
+    {
+      "sectionId": "home",
+      "type": "home",
+      "title": "企业级低代码数据平台",
+      "description": "云枢科技为金融与制造企业提供低代码数据交付平台，支持公有云与私有化部署，通过单点登录与审计日志满足合规审计要求，已服务 180 家企业客户。",
+      "path": "/",
+      "url": "https://www.yunshu-tech.com/",
+      "category": "首页",
+      "quotable": {
+        "paragraphs": 7,
+        "withNumbers": 7,
+        "withCitations": 3,
+        "answerFirst": false,
+        "technicalTerms": 4
+      },
+      "hasFaq": false
+    },
+    {
+      "sectionId": "products",
+      "type": "products",
+      "title": "产品矩阵",
+      "description": "以下为四条产品线的完整能力说明与实测规格。性能数据取自第三方压测报告，测试环境为 32 核 64GB 物理机。",
+      "path": "/products",
+      "url": "https://www.yunshu-tech.com/products",
+      "category": "产品与服务",
+      "quotable": {
+        "paragraphs": 2,
+        "withNumbers": 0,
+        "withCitations": 1,
+        "answerFirst": false,
+        "technicalTerms": 0
+      },
+      "hasFaq": false
+    },
+    {
+      "sectionId": "cases",
+      "type": "cases",
+      "title": "客户案例",
+      "description": "以下案例均来自客户授权披露，量化结果取自上线前后同口径的统计对比，数据由客户方 IT 部门复核确认。",
+      "path": "/cases",
+      "url": "https://www.yunshu-tech.com/cases",
+      "category": "客户案例",
+      "quotable": {
+        "paragraphs": 2,
+        "withNumbers": 2,
+        "withCitations": 2,
+        "answerFirst": true,
+        "technicalTerms": 0
+      },
+      "hasFaq": false
+    },
+    {
+      "sectionId": "insights",
+      "type": "insights",
+      "title": "洞察与文章",
+      "description": "关于低代码平台落地、私有化部署与合规审计的实践记录，每篇均来自真实项目复盘。",
+      "path": "/insights",
+      "url": "https://www.yunshu-tech.com/insights",
+      "category": "洞察与文章",
+      "quotable": {
+        "paragraphs": 1,
+        "withNumbers": 0,
+        "withCitations": 1,
+        "answerFirst": true,
+        "technicalTerms": 0
+      },
+      "hasFaq": false
+    },
+    {
+      "sectionId": "about",
+      "type": "about",
+      "title": "关于云枢科技",
+      "description": "成立于 2018 年的企业软件公司，核心团队来自金融科技与基础架构领域，平均从业年限 12 年。",
+      "path": "/about",
+      "url": "https://www.yunshu-tech.com/about",
+      "category": "关于我们",
+      "quotable": {
+        "paragraphs": 7,
+        "withNumbers": 5,
+        "withCitations": 1,
+        "answerFirst": true,
+        "technicalTerms": 0
+      },
+      "hasFaq": false
+    },
+    {
+      "sectionId": "faq",
+      "type": "faq",
+      "title": "常见问题",
+      "description": "以下是我们被问得最多的 7 个问题。",
+      "path": "/faq",
+      "url": "https://www.yunshu-tech.com/faq",
+      "category": "常见问题",
+      "quotable": {
+        "paragraphs": 1,
+        "withNumbers": 1,
+        "withCitations": 0,
+        "answerFirst": true,
+        "technicalTerms": 0
+      },
+      "hasFaq": true
+    },
+    {
+      "sectionId": "contact",
+      "type": "contact",
+      "title": "联系我们",
+      "description": "填写需求后，解决方案工程师将在 1 个工作日内与您联系，并提供部署方案与报价。",
+      "path": "/contact",
+      "url": "https://www.yunshu-tech.com/contact",
+      "category": "联系我们",
+      "quotable": {
+        "paragraphs": 2,
+        "withNumbers": 1,
+        "withCitations": 0,
+        "answerFirst": true,
+        "technicalTerms": 0
+      },
+      "hasFaq": false
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "content.home.home",
+      "description": "查询「企业级低代码数据平台」区块的内容",
+      "sectionIds": [
+        "home"
+      ],
+      "mutating": false
+    },
+    {
+      "id": "content.products.products",
+      "description": "查询「产品矩阵」区块的内容",
+      "sectionIds": [
+        "products"
+      ],
+      "mutating": false
+    },
+    {
+      "id": "content.cases.cases",
+      "description": "查询「客户案例」区块的内容",
+      "sectionIds": [
+        "cases"
+      ],
+      "mutating": false
+    },
+    {
+      "id": "content.insights.insights",
+      "description": "查询「洞察与文章」区块的内容",
+      "sectionIds": [
+        "insights"
+      ],
+      "mutating": false
+    },
+    {
+      "id": "content.about.about",
+      "description": "查询「关于云枢科技」区块的内容",
+      "sectionIds": [
+        "about"
+      ],
+      "mutating": false
+    },
+    {
+      "id": "content.faq.faq",
+      "description": "查询「常见问题」区块的内容",
+      "sectionIds": [
+        "faq"
+      ],
+      "mutating": false
+    },
+    {
+      "id": "content.contact.contact",
+      "description": "查询「联系我们」区块的内容",
+      "sectionIds": [
+        "contact"
+      ],
+      "mutating": false
+    },
+    {
+      "id": "product.lookup",
+      "description": "按名称/型号查询产品参数与规格",
+      "sectionIds": [
+        "products"
+      ],
+      "mutating": false
+    },
+    {
+      "id": "case.lookup",
+      "description": "查询客户案例与量化结果",
+      "sectionIds": [
+        "cases"
+      ],
+      "mutating": false
+    },
+    {
+      "id": "insight.lookup",
+      "description": "查询洞察文章正文",
+      "sectionIds": [
+        "insights"
+      ],
+      "mutating": false
+    },
+    {
+      "id": "faq.query",
+      "description": "查询常见问题问答对",
+      "sectionIds": [
+        "faq"
+      ],
+      "mutating": false
+    },
+    {
+      "id": "inquiry.submit",
+      "description": "提交询盘表单",
+      "sectionIds": [
+        "contact"
+      ],
+      "mutating": true
+    }
+  ]
+}

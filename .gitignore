@@ -18,3 +18,7 @@ dist/
 logs/
 *.log
 .DS_Store
+
+# 客户站构建中间目录与产物
+sites/*/.build/
+sites/*/out/

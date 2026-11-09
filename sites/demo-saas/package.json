@@ -1,0 +1,15 @@
+{
+  "name": "@geokit/site-demo-saas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "示例客户站 —— SaaS 行业，复用通用企业骨架",
+  "scripts": {
+    "build": "node ../../scripts/build-site.mjs sites/demo-saas",
+    "geo:generate": "node ../../packages/geo-kit/dist/cli.js generate content/site.ts --out public --full",
+    "geo:audit": "node ../../packages/geo-kit/dist/cli.js audit http://localhost:5102 --content content/site.ts"
+  },
+  "dependencies": {
+    "@geokit/geo-kit": "workspace:*"
+  }
+}

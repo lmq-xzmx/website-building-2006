@@ -98,3 +98,11 @@ export {
 
 export { generateArtifacts } from "./artifacts.js";
 export type { GenerateOptions } from "./artifacts.js";
+
+export {
+  INDUSTRY_PACKS,
+  getIndustryPack,
+  applyIndustryPack,
+  terminologyCoverage,
+} from "./content-pack.js";
+export type { IndustryPack } from "./content-pack.js";

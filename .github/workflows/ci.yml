@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 类型检查与测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 类型检查
+        run: pnpm typecheck
+
+      - name: 单元测试
+        run: pnpm test
+
+  build:
+    name: 构建与 GEO 体检
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建核心库
+        run: pnpm --filter @geokit/geo-kit build
+
+      - name: 生成 GEO 产物
+        run: pnpm --filter @geokit/site-corporate geo:generate
+
+      - name: 构建站点
+        run: pnpm --filter @geokit/site-corporate build
+
+      - name: 校验 GEO 产物
+        run: |
+          test -f templates/corporate/out/llms.txt
+          test -f templates/corporate/out/robots.txt
+          test -f templates/corporate/out/sitemap.xml
+          echo "GEO 产物齐备"
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-corporate
+          path: templates/corporate/out
+          retention-days: 7

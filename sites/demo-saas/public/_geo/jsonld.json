@@ -1,0 +1,573 @@
+[
+  {
+    "type": "Organization",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "云枢科技股份有限公司",
+      "url": "https://www.yunshu-tech.com",
+      "legalName": "云枢科技股份有限公司",
+      "description": "企业级低代码数据平台提供商，聚焦金融与制造行业的合规数据交付。",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.yunshu-tech.com/assets/logo.svg"
+      },
+      "foundingDate": "2018-03-12",
+      "industry": "Enterprise Software",
+      "numberOfEmployees": {
+        "@type": "QuantitativeValue",
+        "value": "201-500"
+      },
+      "taxID": "91310115MA1K9XXXXX",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "浦东新区世纪大道 1568 号 27 层",
+        "addressLocality": "上海市",
+        "addressRegion": "上海市",
+        "postalCode": "200122",
+        "addressCountry": "CN"
+      },
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "sales",
+        "telephone": "+86-21-6800-0000",
+        "email": "sales@yunshu-tech.com",
+        "availableLanguage": [
+          "zh-CN",
+          "en"
+        ],
+        "areaServed": "CN"
+      },
+      "sameAs": [
+        "https://github.com/yunshu-tech",
+        "https://www.zhihu.com/org/yunshu-tech"
+      ]
+    },
+    "target": "head"
+  },
+  {
+    "type": "WebSite",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "云枢科技",
+      "url": "https://www.yunshu-tech.com",
+      "inLanguage": "zh-CN",
+      "description": "云枢科技提供企业级低代码数据平台，支持公有云与私有化部署，通过单点登录与审计日志满足金融行业合规要求，已服务 180 家企业客户。",
+      "logo": "https://www.yunshu-tech.com/assets/logo.svg"
+    },
+    "target": "head"
+  },
+  {
+    "type": "WebPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "企业级低代码数据平台",
+      "url": "https://www.yunshu-tech.com/",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "云枢科技",
+        "url": "https://www.yunshu-tech.com"
+      },
+      "description": "云枢科技为金融与制造企业提供低代码数据交付平台，支持公有云与私有化部署，通过单点登录与审计日志满足合规审计要求，已服务 180 家企业客户。"
+    },
+    "target": "head"
+  },
+  {
+    "type": "CollectionPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      "name": "产品矩阵",
+      "url": "https://www.yunshu-tech.com/products",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "云枢科技",
+        "url": "https://www.yunshu-tech.com"
+      },
+      "description": "以下为四条产品线的完整能力说明与实测规格。性能数据取自第三方压测报告，测试环境为 32 核 64GB 物理机。",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "云枢科技",
+            "item": "https://www.yunshu-tech.com"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "产品矩阵",
+            "item": "https://www.yunshu-tech.com/products"
+          }
+        ]
+      }
+    },
+    "target": "head"
+  },
+  {
+    "type": "CollectionPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      "name": "客户案例",
+      "url": "https://www.yunshu-tech.com/cases",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "云枢科技",
+        "url": "https://www.yunshu-tech.com"
+      },
+      "description": "以下案例均来自客户授权披露，量化结果取自上线前后同口径的统计对比，数据由客户方 IT 部门复核确认。",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "云枢科技",
+            "item": "https://www.yunshu-tech.com"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "客户案例",
+            "item": "https://www.yunshu-tech.com/cases"
+          }
+        ]
+      }
+    },
+    "target": "head"
+  },
+  {
+    "type": "BlogPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "BlogPage",
+      "name": "洞察与文章",
+      "url": "https://www.yunshu-tech.com/insights",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "云枢科技",
+        "url": "https://www.yunshu-tech.com"
+      },
+      "description": "关于低代码平台落地、私有化部署与合规审计的实践记录，每篇均来自真实项目复盘。",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "云枢科技",
+            "item": "https://www.yunshu-tech.com"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "洞察与文章",
+            "item": "https://www.yunshu-tech.com/insights"
+          }
+        ]
+      }
+    },
+    "target": "head"
+  },
+  {
+    "type": "AboutPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "AboutPage",
+      "name": "关于云枢科技",
+      "url": "https://www.yunshu-tech.com/about",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "云枢科技",
+        "url": "https://www.yunshu-tech.com"
+      },
+      "description": "成立于 2018 年的企业软件公司，核心团队来自金融科技与基础架构领域，平均从业年限 12 年。",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "云枢科技",
+            "item": "https://www.yunshu-tech.com"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "关于云枢科技",
+            "item": "https://www.yunshu-tech.com/about"
+          }
+        ]
+      }
+    },
+    "target": "head"
+  },
+  {
+    "type": "WebPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "常见问题",
+      "url": "https://www.yunshu-tech.com/faq",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "云枢科技",
+        "url": "https://www.yunshu-tech.com"
+      },
+      "description": "以下是我们被问得最多的 7 个问题。",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "云枢科技",
+            "item": "https://www.yunshu-tech.com"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "常见问题",
+            "item": "https://www.yunshu-tech.com/faq"
+          }
+        ]
+      }
+    },
+    "target": "head"
+  },
+  {
+    "type": "ContactPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "ContactPage",
+      "name": "联系我们",
+      "url": "https://www.yunshu-tech.com/contact",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "云枢科技",
+        "url": "https://www.yunshu-tech.com"
+      },
+      "description": "填写需求后，解决方案工程师将在 1 个工作日内与您联系，并提供部署方案与报价。",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "云枢科技",
+            "item": "https://www.yunshu-tech.com"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "联系我们",
+            "item": "https://www.yunshu-tech.com/contact"
+          }
+        ]
+      }
+    },
+    "target": "head"
+  },
+  {
+    "type": "FAQPage",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "url": "https://www.yunshu-tech.com/faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "私有化部署需要多少台服务器？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "最小配置为 3 台（2 台应用 + 1 台数据库），推荐生产环境 5 台起。单机部署仅适用于测试环境，官方不提供单机版的 SLA 承诺。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "SLA 可用性是多少？未达标如何赔付？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "标准版承诺 99.9% 月度可用性，企业版 99.95%，旗舰版 99.99%。未达标按月度服务费比例赔付，单月最高赔付 30%。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "是否支持信创环境？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "已完成 12 家主流信创产品的兼容性认证，涵盖麒麟与统信操作系统、达梦与人大金仓数据库、飞腾与鲲鹏处理器。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "私有化部署如何授权？是否需要联网？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "使用离线许可证，部署完成后无需连接外网即可正常运行。许可证默认 3 年期，可按年续期。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "审计日志保留多久？能对接内部审计系统吗？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "默认保留 3 年，可延长至 7 年。支持通过 syslog 与 Kafka 两种方式对接客户内部审计系统。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "数据隔离到什么粒度？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "租户间数据库物理隔离，租户内按项目行级隔离。所有跨租户查询在数据库层被拒绝，不依赖应用层过滤。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "实施周期一般多久？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "标准产品线最快 4 周上线。涉及多系统集成的复杂项目通常 8 至 12 周，其中需求确认与数据迁移占约 60% 工时。"
+          }
+        }
+      ]
+    },
+    "target": "body"
+  },
+  {
+    "type": "Product",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "数据集成网关",
+      "description": "数据集成网关部署在企业网络边界，连接 ERP、CRM、数据库与 SaaS 等异构系统，支持实时与批量两种采集模式，提供数据质量校验与断点续传能力。",
+      "category": "数据集成",
+      "additionalProperty": [
+        {
+          "@type": "PropertyValue",
+          "name": "数据源连接器",
+          "value": "1200"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "单节点日处理数据量",
+          "value": "42 亿条"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "采集延迟 P99",
+          "value": "80 ms"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "支持信创产品认证数",
+          "value": "12"
+        }
+      ],
+      "model": "DG-Standard, DG-HA",
+      "brand": {
+        "@type": "Brand",
+        "name": "云枢科技股份有限公司"
+      },
+      "manufacturer": {
+        "@type": "Organization",
+        "name": "云枢科技股份有限公司",
+        "url": "https://www.yunshu-tech.com"
+      }
+    },
+    "target": "body"
+  },
+  {
+    "type": "Product",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "数据工坊",
+      "description": "数据工坊提供拖拽式数据建模与任务编排能力，支持 SQL 作业、可视化流处理与机器学习算子，内置版本管理与灰度发布。",
+      "category": "数据建模",
+      "additionalProperty": [
+        {
+          "@type": "PropertyValue",
+          "name": "内置算子数量",
+          "value": "200"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "单次作业处理量",
+          "value": "8 TB"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "作业调度粒度",
+          "value": "秒级"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "支持灰度发布",
+          "value": "是"
+        }
+      ],
+      "model": "DS-Standard, DS-Enterprise",
+      "brand": {
+        "@type": "Brand",
+        "name": "云枢科技股份有限公司"
+      },
+      "manufacturer": {
+        "@type": "Organization",
+        "name": "云枢科技股份有限公司",
+        "url": "https://www.yunshu-tech.com"
+      }
+    },
+    "target": "body"
+  },
+  {
+    "type": "Product",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "规则引擎",
+      "description": "规则引擎用于实时决策场景，支持复杂事件流匹配、规则版本管理与灰度分流，规则变更无需重启服务。",
+      "category": "实时决策",
+      "additionalProperty": [
+        {
+          "@type": "PropertyValue",
+          "name": "单节点吞吐",
+          "value": "12000 QPS"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "规则响应延迟 P99",
+          "value": "15 ms"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "规则版本并行数",
+          "value": "50"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "规则热更新",
+          "value": "支持"
+        }
+      ],
+      "model": "RE-Standard, RE-HA",
+      "brand": {
+        "@type": "Brand",
+        "name": "云枢科技股份有限公司"
+      },
+      "manufacturer": {
+        "@type": "Organization",
+        "name": "云枢科技股份有限公司",
+        "url": "https://www.yunshu-tech.com"
+      }
+    },
+    "target": "body"
+  },
+  {
+    "type": "Product",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "审计中枢",
+      "description": "审计中枢集中采集平台内所有操作留痕，提供操作回溯、异常行为告警与合规报表输出，日志采用加密存储并支持私有化部署。",
+      "category": "合规审计",
+      "additionalProperty": [
+        {
+          "@type": "PropertyValue",
+          "name": "日志保留年限",
+          "value": "3 年"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "可延长保留",
+          "value": "7 年"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "日均日志写入量",
+          "value": "18 亿条"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "对接方式",
+          "value": "syslog / Kafka"
+        }
+      ],
+      "model": "AH-Standard, AH-HA",
+      "brand": {
+        "@type": "Brand",
+        "name": "云枢科技股份有限公司"
+      },
+      "manufacturer": {
+        "@type": "Organization",
+        "name": "云枢科技股份有限公司",
+        "url": "https://www.yunshu-tech.com"
+      }
+    },
+    "target": "body"
+  },
+  {
+    "type": "BlogPosting",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": "私有化部署的 12 项合规检查清单",
+      "url": "https://www.yunshu-tech.com/insights/private-deployment-checklist",
+      "inLanguage": "zh-CN",
+      "publisher": {
+        "@type": "Organization",
+        "name": "云枢科技股份有限公司",
+        "url": "https://www.yunshu-tech.com"
+      },
+      "description": "金融与国企客户做私有化部署时，合规团队必问的 12 个问题。本文按被问到的频率排序，并给出我们项目中的标准答复。",
+      "datePublished": "2026-09-20",
+      "dateModified": "2026-09-20",
+      "author": {
+        "@type": "Person",
+        "name": "解决方案负责人 王工"
+      },
+      "keywords": "私有化部署, 合规, 选型",
+      "timeRequired": "PT9M",
+      "articleBody": "在我们 180 家客户中，金融与国企占 46%。合规团队在技术选型阶段必问的 12 个问题高度重叠，本文按被问频率排序。\n\n排名第一的问题是「部署后是否需要联网」，标准答复是离线许可证，部署完成后不依赖外网授权校验。\n\n第二与第三名分别是「数据物理隔离到什么粒度」与「审计日志保留多久」，前者我们答数据库物理隔离加租户内行级隔离，后者默认 3 年可延长至 7 年。"
+    },
+    "target": "body"
+  },
+  {
+    "type": "BlogPosting",
+    "data": {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": "SLA 可用性 99.95% 是怎么算出来的",
+      "url": "https://www.yunshu-tech.com/insights/sla-availability-definition",
+      "inLanguage": "zh-CN",
+      "publisher": {
+        "@type": "Organization",
+        "name": "云枢科技股份有限公司",
+        "url": "https://www.yunshu-tech.com"
+      },
+      "description": "很多采购合同里的可用性数字口径模糊，导致争议。本文给出我们对外承诺的计算方式，以及客户验收时该怎么核对。",
+      "datePublished": "2026-10-15",
+      "dateModified": "2026-10-15",
+      "author": {
+        "@type": "Person",
+        "name": "产品负责人 陈工"
+      },
+      "keywords": "SLA, 可用性, 采购",
+      "timeRequired": "PT7M",
+      "articleBody": "可用性数字的口径差异极大：有的按自然月统计，有的按工作日，有的排除计划内维护窗口。口径不写清楚，争议不可避免。\n\n我们的口径是：按自然月统计，统计对象为对外 API 端点，可用性 =（总时长 - 不可用时长）/ 总时长，其中不可用指连续超过 30 秒的请求失败。\n\n计划内维护窗口不计入不可用时长，但需提前 72 小时通知，且单月维护窗口累计不超过 4 小时。"
+    },
+    "target": "body"
+  }
+]

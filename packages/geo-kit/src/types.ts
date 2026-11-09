@@ -252,6 +252,7 @@ export type SchemaType =
   | "Product"
   | "Article"
   | "BlogPosting"
+  | "BlogPage"
   | "FAQPage"
   | "BreadcrumbList"
   | "WebPage"
