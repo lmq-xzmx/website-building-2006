@@ -109,6 +109,29 @@ for (const name of called) {
   problems.push(`调用了未定义的函数：${name}`);
 }
 
+// ── 5. 每个 script 块必须能编译 ─────────────────────────
+//
+// 为什么必须查这一项：
+//   经典 <script> 里出现「await 在非 async 函数里」或「顶层 await」，
+//   是**语法错误** —— 浏览器整块不执行，
+//   页面表现是「所有按钮都没反应 + 某个函数 is not defined」，
+//   而页面看起来完全正常（HTML 渲染出来了，控件也都在）。
+//
+//   这类 bug 只有真点按钮才暴露，所以静态编译一遍是唯一靠谱的护栏。
+//   new Function 的函数体不是模块 —— 顶层 await 同样是非法语法，正好一起抓。
+for (const [i, block] of scriptBlocks.entries()) {
+  const body = block.replace(/^<script\b[^>]*>/, "").replace(/<\/script>$/, "");
+  try {
+    // eslint-disable-next-line no-new-func
+    new Function(body);
+  } catch (e) {
+    problems.push(
+      `第 ${i + 1} 个 script 块编译失败：${e instanceof Error ? e.message : String(e)}` +
+        `（多半是 await 用在了非 async 函数里 —— 整块脚本不会执行）`,
+    );
+  }
+}
+
 // ── 报告 ────────────────────────────────────────────────
 if (problems.length) {
   console.error("❌ 后台界面自检未通过：");

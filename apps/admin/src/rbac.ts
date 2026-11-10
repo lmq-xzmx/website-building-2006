@@ -18,8 +18,17 @@
  *   WB_ROLE_EDITOR   默认 editor
  *   WB_ROLE_REVIEWER 默认 reviewer
  *
- * 未被映射到的角色 = **只有只读权限** ——
- * 认不出来就当没授权，而不是默认放行。
+ * 未被映射到的角色 = **内容全权限（改 / 审 / 发），但不含站点管理**。
+ *
+ * 为什么不是「只读」（2026-11-11 定的）：
+ *   Casdoor 登录时已经校验过 organization —— 组织才是真正的边界。
+ *   角色是组织**内部**的分工细化，生产环境往往根本没配角色名；
+ *   若未识别就锁死，后台会变成「所有按钮都 403」，工具直接不可用
+ *   （实测踩过：媒体上传 403）。
+ *   真正的硬边界（建站点 / 删站点）仍然只给 admin 组。
+ *
+ * 想收紧就把 WB_ROLE_DEFAULT_GROUP 设成 guest（只读），
+ * 或用 WB_ROLE_ADMIN / EDITOR / REVIEWER 指定角色名。
  *
  * ⚠️ 客户端密钥与角色名都不进仓库：密钥在环境变量，
  *    角色名在生产机的 /data/secrets/wb.env。
@@ -41,7 +50,7 @@ export type Permission =
   | "site.manage";
 
 /** 权限组 —— 一组权限的别名 */
-export type RoleKey = "admin" | "editor" | "reviewer" | "guest";
+export type RoleKey = "admin" | "editor" | "reviewer" | "content" | "guest";
 
 /** 每个角色组的权限 */
 export const ROLE_PERMISSIONS: Record<RoleKey, Permission[]> = {
@@ -51,9 +60,26 @@ export const ROLE_PERMISSIONS: Record<RoleKey, Permission[]> = {
   editor: ["site.read", "content.edit"],
   // 审核员：改内容 + 审核 + 发布
   reviewer: ["site.read", "content.edit", "content.review", "content.publish"],
+  // 未识别角色的默认档：内容全权限，但**不能建/删站点**
+  content: ["site.read", "content.edit", "content.review", "content.publish"],
   // 只读：什么都不做
   guest: ["site.read"],
 };
+
+/** 未识别角色落到哪一档 —— 默认 content（可用环境变量收紧） */
+function defaultGroup(): RoleKey {
+  const v = (process.env.WB_ROLE_DEFAULT_GROUP ?? "").trim();
+  if (
+    v === "guest" ||
+    v === "content" ||
+    v === "admin" ||
+    v === "editor" ||
+    v === "reviewer"
+  ) {
+    return v;
+  }
+  return "content";
+}
 
 /** 角色名 → 权限组（可用环境变量覆盖） */
 function roleMapping(): Record<string, RoleKey> {
@@ -68,7 +94,7 @@ function roleMapping(): Record<string, RoleKey> {
  * 算出某个用户的权限集合。
  *
  * 未登录 → 空集。
- * 角色识别不出来 → 只读（宁可少给权限，也不要多给）。
+ * 角色识别不出来 → 落到默认档（默认 content：内容全权限，不含 site.manage）。
  */
 export function permissionsOf(user: SessionUser | null): Set<Permission> {
   const out = new Set<Permission>();
@@ -76,11 +102,8 @@ export function permissionsOf(user: SessionUser | null): Set<Permission> {
 
   const mapping = roleMapping();
   const role = (user.role ?? "").trim();
-  const key = mapping[role];
-  if (!key) {
-    out.add("site.read");
-    return out;
-  }
+  // 未识别的角色 → 默认档（内容全权限，不含 site.manage）
+  const key = mapping[role] ?? defaultGroup();
   for (const p of ROLE_PERMISSIONS[key]) out.add(p);
   return out;
 }

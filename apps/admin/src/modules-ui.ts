@@ -1101,7 +1101,10 @@ function bindModulePanel() {
     renderImagePicker(it);
   });
 
-  document.getElementById("modEditor").addEventListener("click", (e) => {
+  // 注意：这个处理器里有 await（审核动作要发请求）——
+  // 所以必须是 async。写成普通函数会让整个脚本块解析失败，
+  // 连带后面定义的所有函数都不存在（页面上表现为「所有按钮都没反应」）。
+  document.getElementById("modEditor").addEventListener("click", async (e) => {
     const t = e.target;
     if (t.id === "me-page-save") {
       const p = curPage(); if (!p) return;

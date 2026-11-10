@@ -39,10 +39,18 @@ describe("RBAC：角色到权限", () => {
     expect(p.has("content.publish")).toBe(true);
   });
 
-  it("认不出来的角色只给只读 —— 宁可少给不要多给", () => {
+  it("认不出来的角色落默认档：内容全权限，但不含站点管理", () => {
     const p = permissionsOf(user("某个没配过的角色"));
     expect(p.has("site.read")).toBe(true);
-    expect(p.has("content.edit")).toBe(false);
+    expect(p.has("content.edit")).toBe(true);
+    expect(p.has("content.publish")).toBe(true);
+    // 硬边界：建站删站仍然只给 admin 组
+    expect(p.has("site.manage")).toBe(false);
+  });
+
+  it("显式配成 editor 的角色仍受限于 editor", () => {
+    const p = permissionsOf(user("editor"));
+    expect(p.has("content.edit")).toBe(true);
     expect(p.has("content.publish")).toBe(false);
   });
 
