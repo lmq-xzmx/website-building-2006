@@ -196,10 +196,14 @@ export {
 
 export {
   PostgresKnowledgeSource,
+  WeKnoraKnowledgeSource,
   MemoryKnowledgeSource,
+  groupHitsToItems,
   type KnowledgeSource,
   type PostgresSourceOptions,
   type PgLike,
+  type WeKnoraSourceOptions,
+  type FetchLike,
 } from "./sync/source.js";
 
 export { runSync, writeKnowledgeModule, type SyncOptions, type SyncOutput } from "./sync/cli.js";

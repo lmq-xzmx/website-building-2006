@@ -427,19 +427,21 @@ async function cmdSync(args: Args): Promise<void> {
   const contentPath = args.positional[0];
   if (!contentPath) {
     console.error(
-      "用法：geo-kit sync <content.ts> [--out content/knowledge-articles.ts] [--kb <id>] [--database <url>] [--match <正则>] [--tags a,b]",
+      "用法：geo-kit sync <content.ts> [--out content/knowledge-articles.ts] [--kb <id>] [--database <url>] [--match <正则>] [--tags a,b]\n" +
+        "      [--source geo-pg|weknora] [--weknora-url <url>] [--weknora-key <key>] [--weknora-kb-ids a,b]",
     );
     process.exit(1);
   }
 
-  const databaseUrl =
-    (args.flags.database as string | undefined) ??
-    process.env.KNOWLEDGE_DATABASE_URL ??
-    process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    console.error(
-      "未配置数据库连接串。需要 --database <url> 或环境变量 KNOWLEDGE_DATABASE_URL / DATABASE_URL。",
-    );
+  // 数据源：geo-pg（GEO-K 的库，形态 A）/ weknora（WeKnora API，形态 B/C）
+  const sourceKind = (
+    (args.flags.source as string | undefined) ??
+    process.env.KNOWLEDGE_SOURCE ??
+    "geo-pg"
+  ).trim();
+
+  if (sourceKind !== "geo-pg" && sourceKind !== "weknora") {
+    console.error(`未知的 --source：${sourceKind}（可选 geo-pg | weknora）`);
     process.exit(1);
   }
 
@@ -447,9 +449,7 @@ async function cmdSync(args: Args): Promise<void> {
     "./sync/cli.js"
   );
 
-  console.log("读取知识库…");
-  const { result, module } = await runSync({
-    databaseUrl,
+  const syncOptions: Parameters<typeof runSync>[0] = {
     kbId: args.flags.kb as string | undefined,
     mapping: {
       idPrefix: args.flags.prefix as string | undefined,
@@ -458,7 +458,59 @@ async function cmdSync(args: Args): Promise<void> {
         ? String(args.flags.tags).split(",").map((t) => t.trim())
         : undefined,
     },
-  });
+  };
+
+  if (sourceKind === "weknora") {
+    const baseUrl =
+      (args.flags["weknora-url"] as string | undefined) ??
+      process.env.WEKNORA_BASE_URL;
+    const apiKey =
+      (args.flags["weknora-key"] as string | undefined) ??
+      process.env.WEKNORA_API_KEY;
+    if (!baseUrl) {
+      console.error(
+        "WeKnora 源缺少地址。需要 --weknora-url <url> 或环境变量 WEKNORA_BASE_URL。",
+      );
+      process.exit(1);
+    }
+    if (!apiKey) {
+      console.error(
+        "WeKnora 源缺少 API Key。需要 --weknora-key <key> 或环境变量 WEKNORA_API_KEY。",
+      );
+      process.exit(1);
+    }
+    const kbIdsRaw =
+      (args.flags["weknora-kb-ids"] as string | undefined) ??
+      process.env.WEKNORA_KB_IDS;
+    syncOptions.weknora = {
+      baseUrl,
+      apiKey,
+      knowledgeBaseIds: kbIdsRaw
+        ? kbIdsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+        : undefined,
+      query: (args.flags.query as string | undefined) ?? process.env.WEKNORA_QUERY,
+      matchCount: args.flags["match-count"]
+        ? Number(args.flags["match-count"])
+        : undefined,
+    };
+  } else {
+    const databaseUrl =
+      (args.flags.database as string | undefined) ??
+      process.env.KNOWLEDGE_DATABASE_URL ??
+      process.env.DATABASE_URL;
+    if (!databaseUrl) {
+      console.error(
+        "未配置数据库连接串。需要 --database <url> 或环境变量 KNOWLEDGE_DATABASE_URL / DATABASE_URL。",
+      );
+      process.exit(1);
+    }
+    syncOptions.databaseUrl = databaseUrl;
+  }
+
+  console.log(
+    sourceKind === "weknora" ? "读取 WeKnora 知识库…" : "读取知识库…",
+  );
+  const { result, module } = await runSync(syncOptions);
 
   console.log(renderSyncReport(result));
 
@@ -513,6 +565,10 @@ async function main(): Promise<void> {
   geo-kit sync <content.ts> [--out content/knowledge-articles.ts] [--kb <id>]
       从 GEO-Knowledge 的知识库同步内容，产出独立的知识文章模块
       （不覆盖内容包 —— 手写内容永远安全）
+      --source geo-pg|weknora  数据源：GEO-K 的库（默认）/ WeKnora API
+      --weknora-url <url>     WeKnora 地址（也可用 WEKNORA_BASE_URL）
+      --weknora-key <key>     WeKnora API Key（也可用 WEKNORA_API_KEY）
+      --weknora-kb-ids a,b    允许同步的 WeKnora 库 id（也可用 WEKNORA_KB_IDS）
 `);
   }
 }
