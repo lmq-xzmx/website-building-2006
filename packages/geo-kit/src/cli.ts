@@ -558,6 +558,121 @@ async function cmdSync(args: Args): Promise<void> {
   }
 }
 
+/**
+ * UX 体检 —— 对**本地已构建的静态站**跑一遍体验规则。
+ *
+ * 为什么是本地目录而不是 URL：
+ *   UX 规则里有好几条要读 CSS（对比度、字号、行高、点击区）——
+ *   静态导出后 CSS 是独立文件，从线上抓要额外处理；
+ *   而本地目录拿到的就是**构建产物本身**，体检看到的与访客看到的一致。
+ *
+ * 与 `audit` 的分工：
+ *   audit    管 AI 能不能读懂（爬线上站点）
+ *   ux-audit 管人愿不愿意留下（读本地构建产物）
+ */
+async function cmdUxAudit(args: Args): Promise<void> {
+  const dir = args.positional[0];
+  if (!dir) {
+    console.error("用法：geo-kit ux-audit <构建产物目录> [--json]");
+    process.exit(1);
+  }
+
+  const { readdir, readFile, stat } = await import("node:fs/promises");
+  const { join, relative, extname } = await import("node:path");
+  const { auditUxHtml } = await import("./audit/ux.js");
+
+  const root = resolve(dir);
+  const htmlFiles: string[] = [];
+  const cssFiles: string[] = [];
+
+  async function walk(d: string): Promise<void> {
+    for (const name of await readdir(d)) {
+      const p = join(d, name);
+      const st = await stat(p);
+      if (st.isDirectory()) await walk(p);
+      else if (extname(p) === ".html") htmlFiles.push(p);
+      else if (extname(p) === ".css") cssFiles.push(p);
+    }
+  }
+  await walk(root);
+
+  if (!htmlFiles.length) {
+    console.error(`目录里没有 HTML：${root}`);
+    process.exit(1);
+  }
+
+  const css = (
+    await Promise.all(cssFiles.map((f) => readFile(f, "utf8")))
+  ).join("\n");
+
+  // 静态导出里 404 有一族产物（404.html / 404/index.html / _not-found.html），
+  // 内容一样 —— 只算一份，否则「多页共用同一份 description」会误报。
+  const isNotFound = (f: string): boolean => {
+    const rel = relative(root, f).replace(/\\/g, "/");
+    return rel === "404.html" || rel.startsWith("404/") || rel.endsWith("_not-found.html");
+  };
+  let notFoundKept = false;
+
+  const resolved = await Promise.all(
+    htmlFiles
+      .filter((f) => {
+        if (!isNotFound(f)) return true;
+        if (notFoundKept) return false;
+        notFoundKept = true;
+        return true;
+      })
+      .map(async (f) => ({
+        url: "/" + relative(root, f).replace(/index\.html$/, "").replace(/\\/g, "/"),
+        html: await readFile(f, "utf8"),
+        css,
+      })),
+  );
+  const result = auditUxHtml(resolved, {});
+
+  if (args.flags.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  const dim = (s: string) => s.replace(/^./, (c) => c.toUpperCase());
+  console.log(`\nUX 体检：${root}`);
+  console.log(`页面 ${resolved.length} 个 · 总分 ${result.score} / 等级 ${result.grade}\n`);
+
+  console.log("── 站级 ──");
+  for (const c of result.siteChecks) {
+    const mark = c.status === "pass" ? "✓" : c.status === "warn" ? "!" : c.status === "fail" ? "✗" : "–";
+    console.log(
+      `  ${mark} [${dim(c.dimension)}] ${c.name}${c.note ? " —— " + c.note : ""}`,
+    );
+  }
+
+  console.log("\n── 页面级问题 ──");
+  let issues = 0;
+  for (const pr of result.pageResults) {
+    const bad = pr.checks.filter((c) => c.status === "fail" || c.status === "warn");
+    if (!bad.length) continue;
+    console.log(`  ${pr.url}`);
+    for (const c of bad) {
+      issues++;
+      console.log(
+        `      ${c.status === "fail" ? "✗" : "!"} [${dim(c.dimension)}] ${c.name}` +
+          (c.note ? " —— " + c.note : "") +
+          (c.fix ? "\n        ↳ 怎么修：" + c.fix : ""),
+      );
+    }
+  }
+  if (!issues) console.log("  （无）");
+
+  const fails =
+    result.siteChecks.filter((c) => c.status === "fail").length +
+    result.pageResults.reduce(
+      (n, p) => n + p.checks.filter((c) => c.status === "fail").length,
+      0,
+    );
+  console.log(`\n合计：${fails} 个不通过\n`);
+  process.exit(fails > 0 ? 1 : 0);
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   switch (args.command) {
@@ -566,6 +681,9 @@ async function main(): Promise<void> {
       break;
     case "audit":
       await cmdAudit(args);
+      break;
+    case "ux-audit":
+      await cmdUxAudit(args);
       break;
     case "copy":
       await cmdCopy(args);
@@ -587,6 +705,10 @@ async function main(): Promise<void> {
 
   geo-kit audit <url> [--content content.ts] [--json] [--full]
       对站点做 GEO 体检。--full 为站级体检（抓全站查跨页问题）
+
+  geo-kit ux-audit <构建产物目录> [--json]
+      对已构建的静态站跑 UX 体检（人愿不愿意留下来那一面）
+      读本地目录而不是线上 URL —— 样式规则要读构建后的 CSS
 
   geo-kit copy <content.ts> [--out content/copy.ts] [--industry <id>]
       用 AI 生成符合 GEO 写作规则的文案初稿
