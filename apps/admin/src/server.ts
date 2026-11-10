@@ -32,6 +32,76 @@ import {
 
 import { DATABASE_URL, HAS_DB, HOST, PORT, SITES_DIR, listSites } from "./config.ts";
 import { renderPage } from "./ui.ts";
+import {
+  AUTH_ENABLED,
+  CASDOOR_CLIENT_ID,
+  CASDOOR_CLIENT_SECRET,
+  CASDOOR_ENDPOINT,
+  CASDOOR_EXTERNAL_ENDPOINT,
+  CASDOOR_ORGANIZATION,
+  CASDOOR_REDIRECT_URI,
+} from "./config.ts";
+import {
+  authorizeUrl,
+  exchangeCode,
+  fetchUserInfo,
+  toUser,
+  verifyJwt,
+  CasdoorError,
+  type CasdoorSettings,
+} from "./casdoor.ts";
+import {
+  clearSessionCookie,
+  currentUser,
+  setSessionCookie,
+  signSession,
+  type SessionUser,
+} from "./session.ts";
+import { randomBytes } from "node:crypto";
+
+// ── Casdoor 设置 ────────────────────────────────────────
+
+const casdoorSettings: CasdoorSettings = {
+  externalEndpoint: CASDOOR_EXTERNAL_ENDPOINT,
+  endpoint: CASDOOR_ENDPOINT,
+  clientId: CASDOOR_CLIENT_ID,
+  clientSecret: CASDOOR_CLIENT_SECRET,
+  organization: CASDOOR_ORGANIZATION,
+  redirectUri: CASDOOR_REDIRECT_URI,
+};
+
+// 授权流程的一次性 state（防 CSRF）—— 进程内存，单实例部署够用
+const pendingStates = new Map<string, number>();
+const STATE_TTL_MS = 5 * 60_000;
+
+function issueState(): string {
+  const state = randomBytes(24).toString("base64url");
+  pendingStates.set(state, Date.now() + STATE_TTL_MS);
+  // 顺手清过期
+  for (const [k, exp] of pendingStates) {
+    if (exp < Date.now()) pendingStates.delete(k);
+  }
+  return state;
+}
+
+function consumeState(state: string): boolean {
+  const exp = pendingStates.get(state);
+  pendingStates.delete(state);
+  return exp !== undefined && exp > Date.now();
+}
+
+// ── 登录守卫 ────────────────────────────────────────────
+
+function redirectToLogin(res: ServerResponse, path: string): void {
+  const state = issueState();
+  // 记住用户想去哪，登录完送回去
+  nextPaths.set(state, path);
+  res.writeHead(302, { Location: authorizeUrl(casdoorSettings, state) });
+  res.end();
+}
+
+/** state → 想去的原始路径 */
+const nextPaths = new Map<string, string>();
 
 // ── 数据源 ──────────────────────────────────────────────
 // 只读连接。进程启动时建一次，请求复用。
@@ -116,7 +186,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const path = url.pathname;
 
   try {
-    // GET /healthz —— 部署探活
+    // GET /healthz —— 部署探活（**不鉴权**，healthcheck 用）
     //
     // 不查数据库：知识库不可用时后台仍能启动、能展示界面，
     // 只是编排功能不可用。这种情况不该判定为「服务不健康」。
@@ -125,9 +195,82 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
 
-    // GET / —— 后台界面
-    if (req.method === "GET" && path === "/") {
-      const html = await renderPage();
+    // ── Casdoor 登录流程（鉴权开启时才有意义）────────────
+    //
+    // 完整链路：
+    //   未登录访问后台 → 302 到 Casdoor 授权页（带 state）
+    //   → Casdoor 回跳 /oauth2/callback?code=...&state=...
+    //   → 核销 state（防 CSRF/重放）→ code 换 access_token
+    //   → **本地 JWKS 验签**（不走 introspect，见 casdoor.ts）
+    //   → 组织校验 → 签发本地会话 cookie → 送回原页面
+
+    // GET /oauth2/callback —— Casdoor 回跳
+    if (req.method === "GET" && path === "/oauth2/callback") {
+      if (!AUTH_ENABLED) {
+        text(res, 404, "鉴权未开启");
+        return;
+      }
+      const err = url.searchParams.get("error");
+      if (err) {
+        text(res, 400, `Casdoor 授权被拒绝：${err}`);
+        return;
+      }
+      const code = url.searchParams.get("code");
+      const state = url.searchParams.get("state") ?? "";
+      if (!code || !consumeState(state)) {
+        text(res, 400, "state 无效或已过期（可能被重放），请重新登录");
+        return;
+      }
+      try {
+        const accessToken = await exchangeCode(casdoorSettings, code);
+        const claims = await verifyJwt(casdoorSettings, accessToken);
+        const info = await fetchUserInfo(casdoorSettings, accessToken);
+        const user = toUser(claims, info, CASDOOR_ORGANIZATION);
+        setSessionCookie(res, signSession(user));
+        const next = nextPaths.get(state) ?? "/";
+        nextPaths.delete(state);
+        res.writeHead(302, { Location: next });
+        res.end();
+      } catch (e) {
+        if (e instanceof CasdoorError) {
+          json(res, e.statusCode, { error: e.message, detail: e.detail });
+        } else {
+          throw e;
+        }
+      }
+      return;
+    }
+
+    // GET /logout —— 清会话（Casdoor 侧的单点登出不在此处理）
+    if (req.method === "GET" && path === "/logout") {
+      clearSessionCookie(res);
+      res.writeHead(302, { Location: "/" });
+      res.end();
+      return;
+    }
+
+    // ── 登录守卫 ────────────────────────────────────────
+    //
+    // /healthz 与登录流程已在上面放行；其余路径在 AUTH_ENABLED 时都要会话。
+    // API 请求回 401 JSON（fetch 要的是可判定的状态码，不是 302）；
+    // 页面请求 302 去登录。
+    const user = AUTH_ENABLED ? currentUser(req) : null;
+    if (AUTH_ENABLED && !user) {
+      if (path.startsWith("/api/")) {
+        json(res, 401, { error: "未登录" });
+        return;
+      }
+      if (req.method === "GET") {
+        redirectToLogin(res, path);
+        return;
+      }
+      text(res, 401, "未登录");
+      return;
+    }
+
+    // GET / 和 /admin —— 后台界面（把当前用户注入给界面显示）
+    if (req.method === "GET" && (path === "/" || path === "/admin")) {
+      const html = await renderPage(user ?? undefined);
       res.writeHead(200, {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",

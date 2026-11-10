@@ -37,6 +37,51 @@ export const DATABASE_URL =
 /** 是否配置了数据库 */
 export const HAS_DB = DATABASE_URL.length > 0;
 
+// ── Casdoor 鉴权 ────────────────────────────────────────
+//
+// 两个 endpoint 分开：
+//   EXTERNAL —— 浏览器跳转用（授权页）。生产与开发都用能被浏览器打开的地址。
+//   ENDPOINT —— 服务端调用用（换 token / 验签）。生产容器内走
+//               host.docker.internal，避免公网回环 NAT 问题。
+//
+// ⚠️ 客户端密钥只从环境变量读，**不写进仓库**。
+
+export const CASDOOR_EXTERNAL_ENDPOINT = (
+  process.env.CASDOOR_EXTERNAL_ENDPOINT ?? ""
+).replace(/\/+$/, "");
+
+export const CASDOOR_ENDPOINT = (
+  process.env.CASDOOR_ENDPOINT ?? CASDOOR_EXTERNAL_ENDPOINT
+).replace(/\/+$/, "");
+
+export const CASDOOR_CLIENT_ID = process.env.CASDOOR_CLIENT_ID ?? "";
+export const CASDOOR_CLIENT_SECRET = process.env.CASDOOR_CLIENT_SECRET ?? "";
+export const CASDOOR_ORGANIZATION = process.env.CASDOOR_ORGANIZATION ?? "";
+
+/** 回调地址 —— 必须与 Casdoor 应用里登记的「重定向 URLs」逐字一致 */
+export const CASDOOR_REDIRECT_URI = process.env.CASDOOR_REDIRECT_URI ?? "";
+
+/**
+ * 鉴权是否开启。
+ *
+ * 开启条件：配齐 client_id + client_secret + redirect_uri。
+ * 没配齐就**不鉴权**（保持旧的开发体验），但配置了一半会在启动时告警 ——
+ * 生产上必须三个都给，别让它悄悄以无鉴权状态跑到线上。
+ */
+export const AUTH_ENABLED =
+  CASDOOR_CLIENT_ID.length > 0 &&
+  CASDOOR_CLIENT_SECRET.length > 0 &&
+  CASDOOR_REDIRECT_URI.length > 0;
+
+if (
+  !AUTH_ENABLED &&
+  (CASDOOR_CLIENT_ID || CASDOOR_CLIENT_SECRET || CASDOOR_REDIRECT_URI)
+) {
+  console.warn(
+    "⚠️ Casdoor 配置不完整（缺 client_id / client_secret / redirect_uri 之一）—— 鉴权未开启",
+  );
+}
+
 /**
  * 站点列表 —— 扫描 sites/ 下每个含 content/site.ts 的目录。
  *

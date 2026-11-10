@@ -12,7 +12,10 @@
  *   右：校验与预览（发布前确认）
  */
 
-export async function renderPage(): Promise<string> {
+export async function renderPage(user?: {
+  displayName?: string;
+  name?: string;
+}): Promise<string> {
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -94,6 +97,8 @@ export async function renderPage(): Promise<string> {
   .toast.on { opacity: 1; }
   .toast.err { border-color: var(--err); }
   .count { color: var(--dim); font-size: 12px; }
+  .who { color: var(--dim); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+  .who button { padding: 2px 8px; font-size: 12px; }
   code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
 </style>
 </head>
@@ -107,6 +112,7 @@ export async function renderPage(): Promise<string> {
   <span class="sp"></span>
   <button id="save">保存计划</button>
   <button id="publish" class="primary">发布</button>
+  <span id="who" class="who"></span>
 </header>
 
 <main>
@@ -129,6 +135,9 @@ export async function renderPage(): Promise<string> {
 <div class="toast" id="toast"></div>
 
 <script>
+// 当前登录用户（服务端注入；未开启鉴权时为 null）
+window.__USER__ = ${user ? JSON.stringify({ displayName: user.displayName, name: user.name }).replace(/</g, "\\u003c") : "null"};
+
 const $ = (id) => document.getElementById(id);
 
 let sites = [], bases = [], kbItems = [], plan = null, siteId = null;
@@ -395,6 +404,16 @@ $("publish").addEventListener("click", async () => {
   await loadSites();
   await loadKb();
 })();
+
+// 登录状态（服务端注入 __USER__；未开启鉴权时为 null）
+if (window.__USER__) {
+  const who = $("who");
+  who.textContent = window.__USER__.displayName || window.__USER__.name;
+  const btn = document.createElement("button");
+  btn.textContent = "退出";
+  btn.addEventListener("click", () => { location.href = "/logout"; });
+  who.appendChild(btn);
+}
 </script>
 </body>
 </html>

@@ -31,6 +31,17 @@ if [[ -z "${KNOWLEDGE_DATABASE_URL:-}" ]]; then
   exit 1
 fi
 
+# Casdoor 鉴权配置（可选）—— .env.casdoor.local 已 gitignore，不进仓库。
+# 存在就加载：后台自动开启登录；删掉它就是无鉴权的开发模式。
+if [[ -f "$REPO_ROOT/.env.casdoor.local" ]]; then
+  set -a
+  source "$REPO_ROOT/.env.casdoor.local"
+  set +a
+  echo "▸ Casdoor 鉴权：已加载 .env.casdoor.local（回调 ${CASDOOR_REDIRECT_URI}）"
+else
+  echo "▸ Casdoor 鉴权：未配置（无 .env.casdoor.local）—— 后台无鉴权"
+fi
+
 # geo-kit 要先构建 —— 后台 import 的是 dist/
 pnpm --filter @geokit/geo-kit build
 

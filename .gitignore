@@ -26,3 +26,6 @@ sites/*/out/
 # 内部部署分析（含内网地址与生产机信息）—— 仓库公开，这些不入库
 docs/06-*.md
 docs/_internal/
+
+# Casdoor 本地凭据（不进仓库）
+.env.casdoor.local
