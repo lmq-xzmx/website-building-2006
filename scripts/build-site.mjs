@@ -311,6 +311,32 @@ async function generateGeoArtifacts(buildDir) {
   console.log(
     `  ${artifacts.jsonLd.length} 段 JSON-LD，${artifacts.index.entries.length} 条索引`,
   );
+
+  // ── 没有模块页时，摘掉 catch-all 路由 ─────────────────
+  //
+  // 为什么必须这么做：
+  //   `output: "export"` 下，Next 见到 catch-all 路由就要求
+  //   generateStaticParams —— 而**返回空数组也会报错**
+  //   （报 "missing generateStaticParams()"）。
+  //
+  //   「这个站点没有模块编排页」是完全正常的状态
+  //   （刚建站、或客户还没在后台编排），不该让构建失败。
+  //
+  // 做法：构建目录是临时目录，删它不影响源骨架。
+  //   只在**确实没有非根路径的模块页**时删 —— 根路径（/）由
+  //   app/page.tsx 那个固定页型负责，catch-all 本来也不接它。
+  const modulePages = content.pages ?? [];
+  const hasCatchAllPages = modulePages.some(
+    (p) => p.path && p.path !== "/" && p.path !== "",
+  );
+
+  const catchAllDir = join(buildDir, "app", "[...slug]");
+  if (!hasCatchAllPages && existsSync(catchAllDir)) {
+    await rm(catchAllDir, { recursive: true, force: true });
+    console.log("  无模块编排页 —— 已摘掉 catch-all 路由（静态导出不允许空参数）");
+  } else if (hasCatchAllPages) {
+    console.log(`  模块编排页 ${modulePages.length} 个 —— catch-all 路由保留`);
+  }
 }
 
 main().catch((err) => {
