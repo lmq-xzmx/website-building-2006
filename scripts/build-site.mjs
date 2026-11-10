@@ -149,6 +149,9 @@ async function prepareBuildDeps(buildDir, buildPkg, skeletonPath) {
   }
 
   console.log("▸ 安装构建依赖（npm install）…");
+  // 先清掉旧的 node_modules —— 可能残留着工作区软链农场（auto 模式留下的），
+  // npm 面对一堆软链会当成 link 依赖处理，装出来的树不干净。
+  await rm(join(buildDir, "node_modules"), { recursive: true, force: true });
   const npmArgs = ["install", "--no-audit", "--no-fund"];
   if (process.env.WB_NPM_REGISTRY) {
     npmArgs.push(`--registry=${process.env.WB_NPM_REGISTRY}`);
@@ -285,7 +288,12 @@ async function main() {
   // 其余内容（骨架页面层、内容包、产物）每次重建，保证内容是最新的。
   await mkdir(buildDir, { recursive: true });
   for (const item of await readdir(buildDir)) {
-    if (item === "node_modules" || item === ".next") continue;
+    // node_modules —— 依赖装一次就好；.next —— next build 的增量缓存
+    // （内容变了 next 会自己失效）；.deps-fingerprint —— 依赖指纹，
+    // 用来判断能不能跳过安装 —— 这三个都不能删。
+    if (item === "node_modules" || item === ".next" || item === DEPS_MARKER) {
+      continue;
+    }
     await rm(join(buildDir, item), { recursive: true, force: true });
   }
 
