@@ -147,6 +147,25 @@ img {
   flex-shrink: 0;
 }
 
+/* 搜索入口 —— 工具位，不是栏目 */
+.header-search {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.header-search:hover {
+  color: var(--color-text);
+  background: var(--color-bg-muted);
+}
+
 /* ── 按钮 ───────────────────────────────────────────────── */
 
 .btn {
@@ -864,6 +883,51 @@ img {
 .ai-input-row input:focus {
   outline: none;
   border-color: var(--color-primary);
+}
+
+/* ── 站内搜索 ───────────────────────────────────────────── */
+
+/*
+   搜索页只复用现成的类（.field / .card / .grid / .article-meta / .tag），
+   这里只补三样**搜索特有**的东西：搜索框容器、匹配模式开关、命中高亮。
+*/
+
+.search-box {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 40rem;
+  margin-bottom: var(--space-8);
+}
+
+.search-mode {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.search-mode input {
+  accent-color: var(--color-primary);
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.search-snippet {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-2);
+}
+
+/* 命中高亮 —— 用主色浅底，不用浏览器默认的黄底（深色模式下刺眼） */
+mark {
+  background: var(--color-primary-subtle);
+  color: var(--color-text-primary);
+  padding: 0 0.15em;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
 }
 
 /* ── 响应式 ─────────────────────────────────────────────── */

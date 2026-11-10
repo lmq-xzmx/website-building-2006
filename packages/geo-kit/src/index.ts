@@ -451,3 +451,16 @@ export {
   type DiffKind,
   type DiffScope,
 } from "./history/diff.js";
+
+// ── 站内搜索（构建期索引 + 客户端检索）────────────────────
+
+export {
+  buildSearchIndex,
+  searchIndex,
+  splitByTerms,
+  type SearchIndex,
+  type SearchIndexEntry,
+  type SearchOptions,
+  type SearchResult,
+  type SearchResultSegment,
+} from "./search.js";

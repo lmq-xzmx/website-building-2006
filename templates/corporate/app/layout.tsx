@@ -48,6 +48,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const themeAttrs = themeHtmlAttrs(site.theme);
   const themeCss = generateThemeCss(site.theme);
 
+  // 搜索入口 —— **不改动 site.ts**。
+  //
+  // site.ts 是人写的内容包（分层铁律：机器永不触碰），往里加一个「搜索」
+  // 会把「内容编排」与「骨架能力」混在一起 —— 换个骨架还得记得补。
+  //
+  // 搜索是**骨架自带的能力**（每个站都有 /search 页），入口挂在骨架层：
+  //   客户自己的导航里已经有 /search 时不重复加。
+  const hasSearchNav = nav.some((n) => n.href === "/search");
+
   return (
     <html lang={site.language ?? site.locale} {...themeAttrs}>
       <head>
@@ -73,6 +82,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </Link>
               ))}
             </nav>
+            {/* 搜索是**工具入口**，不是栏目 —— 放在 nav 外面。
+                主导航项数是有上限的（5–7 项，多了信息架构就散了，
+                ux 体检的 ux-nav-count 就是查这个）；
+                搜索不占一个栏目位。 */}
+            {!hasSearchNav && (
+              <Link href="/search" className="header-search" aria-label="站内搜索">
+                搜索
+              </Link>
+            )}
             <Link href="/contact" className="btn btn-primary header-cta">
               获取报价
             </Link>

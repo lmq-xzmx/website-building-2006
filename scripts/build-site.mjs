@@ -422,6 +422,7 @@ async function generateGeoArtifacts(buildDir) {
     artifactsToFiles,
     mergePlanContent,
     mergeModuleContent,
+    buildSearchIndex,
   } = await import(pathToFileURL(join(geoKitDist, "index.js")).href);
 
   const contentDir = join(buildDir, "content");
@@ -475,6 +476,21 @@ async function generateGeoArtifacts(buildDir) {
   console.log(
     `  ${artifacts.jsonLd.length} 段 JSON-LD，${artifacts.index.entries.length} 条索引`,
   );
+
+  // ── 站内搜索索引 ───────────────────────────────────────
+  //
+  // 从**合并后**的内容生成 —— 与 GEO 产物同一个 content 对象，
+  // 所以索引到的就是访客能看到的（模块编排 + 手写内容包合并后的最终页面）。
+  //
+  // 落到 public/ 下：next build 会把 public/ 原样复制进 out/，
+  // 于是产物里就有 search-index.json（前端 fetch 它做本地过滤）。
+  const searchIndex = buildSearchIndex(content);
+  await writeFile(
+    join(publicDir, "search-index.json"),
+    JSON.stringify(searchIndex, null, 2),
+    "utf8",
+  );
+  console.log(`  搜索索引 ${searchIndex.items.length} 条 → public/search-index.json`);
 
   // ── 没有模块页时，摘掉 catch-all 路由 ─────────────────
   //
