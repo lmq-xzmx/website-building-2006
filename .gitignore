@@ -29,6 +29,11 @@ sites/*/content/modules.generated.ts
 sites/*/plan.json
 sites/*/modules.json
 
+# 媒体库清单（机器生成）—— 图片本体跟着站点走，清单不入库
+sites/*/media.json
+sites/*/fragments.json
+sites/*/history/
+
 # 内部部署分析（含内网地址与生产机信息）—— 仓库公开，这些不入库
 docs/06-*.md
 docs/_internal/
