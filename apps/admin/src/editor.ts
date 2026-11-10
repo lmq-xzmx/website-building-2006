@@ -118,6 +118,7 @@ function escapeText(s: string): string {
  *   }
  */
 export const EDITOR_SCRIPT = `
+<script>
 (function () {
   const BLOCK_LABEL = ${JSON.stringify(BLOCK_LABEL)};
 
@@ -386,4 +387,5 @@ export const EDITOR_SCRIPT = `
     );
   };
 })();
+</script>
 `;

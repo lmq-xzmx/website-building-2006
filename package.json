@@ -16,7 +16,8 @@
     "dev:kit": "pnpm --filter @geokit/geo-kit dev",
     "dev:site": "pnpm --filter @geokit/site-corporate dev",
     "build:site": "pnpm --filter @geokit/site-corporate build",
-    "audit": "pnpm --filter @geokit/geo-kit audit"
+    "audit": "pnpm --filter @geokit/geo-kit audit",
+    "check:ui": "node --experimental-strip-types --no-warnings scripts/check-admin-ui.mjs"
   },
   "devDependencies": {
     "typescript": "^5.7.2",
