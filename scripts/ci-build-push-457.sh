@@ -33,21 +33,34 @@ fi
 cd "$SRC"
 
 # ── 把编排产物同步进构建上下文 ──────────────────────────
-# 后台在生产上写的 plan.json / plan.generated.ts 落在宿主的
-# WB_SITES_DIR（卷挂载点），不在源码目录里。
-# 构建前要同步进来 —— 否则站点构建出来的是「只有手写内容」的版本，
-# 后台编排的成果根本没进站。
+# 后台在生产上写的编排产物落在宿主的 WB_SITES_DIR（卷挂载点），
+# 不在源码目录里。构建前要同步进来 —— 否则站点构建出来的是
+# 「只有手写内容」的版本，后台编排的成果根本没进站。
+#
+# 两份产物都要带：
+#   plan.generated.ts    编排台产物（知识条目 → 四个固定槽位）
+#   modules.generated.ts 模块编排产物（页面 → 模块 → 条目 + 外观配置）
+#
+# ⚠️ 带 modules.generated.ts 时，外观配置（布局变体等）才会生效 ——
+#    它不在 modules.generated.ts 里，而是在同文件的 appearance 导出。
 if [ -n "${WB_SITES_DIR:-}" ] && [ -d "$WB_SITES_DIR" ]; then
   echo "=== 同步编排产物：$WB_SITES_DIR → $SRC/sites ==="
   for site in "$WB_SITES_DIR"/*/; do
     [ -d "$site" ] || continue
     name=$(basename "$site")
     [ -d "$SRC/sites/$name" ] || continue
-    if [ -f "$site/content/plan.generated.ts" ]; then
-      mkdir -p "$SRC/sites/$name/content"
-      cp "$site/content/plan.generated.ts" "$SRC/sites/$name/content/plan.generated.ts"
-      cp "$site/plan.json" "$SRC/sites/$name/plan.json" 2>/dev/null || true
-      echo "  $name: 已带入 plan.generated.ts"
+    mkdir -p "$SRC/sites/$name/content"
+    brought=""
+    for f in plan.generated.ts modules.generated.ts; do
+      if [ -f "$site/content/$f" ]; then
+        cp "$site/content/$f" "$SRC/sites/$name/content/$f"
+        brought="$brought $f"
+      fi
+    done
+    cp "$site/plan.json" "$SRC/sites/$name/plan.json" 2>/dev/null || true
+    cp "$site/modules.json" "$SRC/sites/$name/modules.json" 2>/dev/null || true
+    if [ -n "$brought" ]; then
+      echo "  $name: 已带入$brought"
     else
       echo "  $name: 无编排产物（只有手写内容）"
     fi
