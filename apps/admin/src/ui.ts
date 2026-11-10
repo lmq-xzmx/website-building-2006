@@ -7,10 +7,15 @@
  *   真需要复杂交互时再换框架 —— 届时 API 边界已经划好，不影响后端。
  *
  * 界面分区：
- *   左：知识库（选内容）
- *   中：编排台（当前站点的内容组织）
- *   右：校验与预览（发布前确认）
+ *   编排台视图（左：知识库 / 中：编排台 / 右：校验与预览）
+ *   模块视图  （页面 / 模块 / 条目 / 编辑）—— 见 modules-ui.ts
+ *
+ * 两个视图并存：编排台管「知识条目 → 固定槽位」，
+ * 模块视图管「页面 → 模块 → 条目」的自由组合。
  */
+
+import { EDITOR_SCRIPT } from "./editor.ts";
+import { MODULE_PANEL_CSS, MODULE_PANEL_HTML, MODULE_PANEL_SCRIPT } from "./modules-ui.ts";
 
 export async function renderPage(user?: {
   displayName?: string;
@@ -99,12 +104,20 @@ export async function renderPage(user?: {
   .count { color: var(--dim); font-size: 12px; }
   .who { color: var(--dim); font-size: 12px; display: flex; align-items: center; gap: 8px; }
   .who button { padding: 2px 8px; font-size: 12px; }
+  .tabs { display: flex; gap: 2px; border: 1px solid var(--line); border-radius: 6px; padding: 2px; }
+  .tab { border: none; background: transparent; padding: 3px 10px; border-radius: 4px; font-size: 13px; }
+  .tab.on { background: var(--accent); color: #0b1220; font-weight: 600; }
   code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  ${MODULE_PANEL_CSS}
 </style>
 </head>
 <body>
 <header>
   <h1>内容后台</h1>
+  <div class="tabs">
+    <button id="tabPlan" class="tab on">编排台</button>
+    <button id="tabModule" class="tab">模块</button>
+  </div>
   <label>站点 <select id="site"></select></label>
   <label>知识库 <select id="kb"></select></label>
   <input type="search" id="q" placeholder="搜索标题 / 摘要…" />
@@ -132,7 +145,11 @@ export async function renderPage(user?: {
   </section>
 </main>
 
+${MODULE_PANEL_HTML}
+
 <div class="toast" id="toast"></div>
+
+${EDITOR_SCRIPT}
 
 <script>
 // 当前登录用户（服务端注入；未开启鉴权时为 null）
@@ -215,8 +232,15 @@ function renderKb() {
   if (!list.length) { $("kbList").innerHTML = '<div class="empty">没有匹配的条目</div>'; return; }
 
   const chosen = new Set((plan?.entries ?? []).map((e) => e.itemId));
+  // 模块视图下，「加入编排」换成「加入模块」—— 内容来源同样是知识库，
+  // 但落到「页面 → 模块 → 条目」的树里。
+  const moduleView = typeof currentView !== "undefined" && currentView === "module";
   $("kbList").innerHTML = list.map((i) => {
     const inPlan = chosen.has(i.id);
+    const action = moduleView
+      ? '<button data-modadd="' + esc(i.id) + '">加入模块</button>'
+      : '<button data-add="' + esc(i.id) + '"' + (inPlan ? " disabled" : "") + ">" +
+        (inPlan ? "已加入" : "加入编排") + "</button>";
     return '<div class="row">' +
       '<div class="t">' + esc(i.title) + "</div>" +
       '<div class="m">' + statusPill(i.sync_status) +
@@ -224,7 +248,7 @@ function renderKb() {
       (i.tags ? "<span>" + i.tags.slice(0, 3).map(esc).join(" · ") + "</span>" : "") +
       "</div>" +
       '<div class="m" style="margin-top:6px">' +
-      '<button data-add="' + esc(i.id) + '"' + (inPlan ? " disabled" : "") + ">" + (inPlan ? "已加入" : "加入编排") + "</button>" +
+      action +
       '<button data-view="' + esc(i.id) + '">看正文</button>' +
       "</div></div>";
   }).join("");
@@ -338,6 +362,12 @@ $("kbList").addEventListener("click", async (e) => {
     renderKb(); renderPlan();
     return;
   }
+  // 模块视图：把知识条目加进当前选中的模块
+  const modAddId = e.target.dataset?.modadd;
+  if (modAddId) {
+    if (window.__modAddKbItem) window.__modAddKbItem(modAddId);
+    return;
+  }
   const viewId = e.target.dataset?.view;
   if (viewId) {
     const r = await fetch("/api/kb/item/" + encodeURIComponent(viewId));
@@ -414,6 +444,33 @@ if (window.__USER__) {
   btn.addEventListener("click", () => { location.href = "/logout"; });
   who.appendChild(btn);
 }
+</script>
+
+${MODULE_PANEL_SCRIPT}
+
+<script>
+// ── 视图切换 ────────────────────────────────────────────
+let currentView = "plan";
+
+function switchView(v) {
+  currentView = v;
+  document.querySelector("main").hidden = v !== "plan";
+  document.getElementById("modulePane").hidden = v !== "module";
+  document.getElementById("tabPlan").classList.toggle("on", v === "plan");
+  document.getElementById("tabModule").classList.toggle("on", v === "module");
+  // 编排台专属按钮在模块视图下无意义
+  document.getElementById("save").hidden = v !== "plan";
+  document.getElementById("publish").hidden = v !== "plan";
+  if (v === "module") loadModules();
+  // 知识库列表的按钮随视图变化（「加入编排」↔「加入模块」）
+  renderKb();
+}
+
+document.getElementById("tabPlan").addEventListener("click", () => switchView("plan"));
+document.getElementById("tabModule").addEventListener("click", () => switchView("module"));
+
+// 模块面板的绑定（在 MODULE_PANEL_SCRIPT 之后执行）
+if (typeof bindModulePanel === "function") bindModulePanel();
 </script>
 </body>
 </html>

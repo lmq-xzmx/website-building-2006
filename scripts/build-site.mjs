@@ -37,11 +37,15 @@ async function run(cmd, args, cwd) {
 }
 
 /**
- * 合并计划内容 —— 在**构建目录**里做，源站不动。
+ * 合并机器生成的内容 —— 在**构建目录**里做，源站不动。
  *
  * 做法：
  *   site.ts          → 改名 site.base.ts（手写内容，原封不动）
- *   site.ts          → 新生成，import base + planContent 后合并
+ *   site.ts          → 新生成，import base + 机器内容后合并
+ *
+ * 两份机器内容：
+ *   plan.generated.ts     —— 编排台产物（知识条目 → 四个固定槽位）
+ *   modules.generated.ts  —— 模块编排产物（页面 → 模块 → 条目）
  *
  * 为什么用改名而不是改写 site.ts 的内容：
  *   改写要解析 TS 再序列化，容易丢注释、丢格式；
@@ -49,10 +53,13 @@ async function run(cmd, args, cwd) {
  */
 async function mergePlanContent(contentDir) {
   const planPath = join(contentDir, "plan.generated.ts");
+  const modulesPath = join(contentDir, "modules.generated.ts");
   const sitePath = join(contentDir, "site.ts");
   const basePath = join(contentDir, "site.base.ts");
 
-  if (!existsSync(planPath)) return; // 没有计划内容 → 什么都不做
+  const hasPlan = existsSync(planPath);
+  const hasModules = existsSync(modulesPath);
+  if (!hasPlan && !hasModules) return; // 没有机器内容 → 什么都不做
 
   // 已经有 site.base.ts 说明合并过一次 —— 先还原，避免叠加叠加
   if (existsSync(basePath)) {
@@ -62,10 +69,25 @@ async function mergePlanContent(contentDir) {
     await cp(sitePath, basePath);
   }
 
+  // 只有实际存在的那份才 import —— 否则构建会因为缺文件直接失败
+  const imports = [];
+  // 合并链：每一步接上一步的结果，不能都从 base 起算（否则后一步会覆盖前一步）
+  let expr = "base";
+  if (hasPlan) {
+    imports.push(`import { planContent } from "./plan.generated";`);
+    expr = "mergePlanContent(base, planContent)";
+  }
+  if (hasModules) {
+    imports.push(`import { modulePages } from "./modules.generated";`);
+    expr = `mergeModuleContent(${expr}, modulePages)`;
+  }
+
   const merged = `/**
  * 合并后的内容包 —— **构建时自动生成**。
  *
- * = site.base.ts（手写内容）+ plan.generated.ts（后台编排的知识库内容）
+ * = site.base.ts（手写内容）+ 机器生成的内容
+ *   - plan.generated.ts    编排台产物（知识条目 → 固定槽位）
+ *   - modules.generated.ts 模块编排产物（页面 → 模块 → 条目）
  *
  * 手写内容永远完整保留 —— 机器内容只做叠加。
  *
@@ -76,21 +98,24 @@ async function mergePlanContent(contentDir) {
  */
 
 import type { SiteContent } from "@geokit/geo-kit";
-import { mergePlanContent } from "@geokit/geo-kit";
+import { mergePlanContent, mergeModuleContent } from "@geokit/geo-kit";
 
 import * as baseMod from "./site.base";
-import { planContent } from "./plan.generated";
+${imports.join("\n")}
 
 // 客户的内容包可能导出 site、default 或两者 —— 都兼容
 const base = (baseMod.site ?? baseMod.default) as SiteContent;
 
-export const site: SiteContent = mergePlanContent(base, planContent);
+export const site: SiteContent = ${expr};
 
 export default site;
 `;
 
   await writeFile(sitePath, merged, "utf8");
-  console.log("▸ 已合并计划内容（手写内容未改动）");
+  const parts = [];
+  if (hasPlan) parts.push("计划");
+  if (hasModules) parts.push("模块");
+  console.log(`▸ 已合并${parts.join(" + ")}内容（手写内容未改动）`);
 }
 
 async function main() {
@@ -228,13 +253,17 @@ async function main() {
  */
 async function generateGeoArtifacts(buildDir) {
   const geoKitDist = resolve(repoRoot, "packages/geo-kit/dist");
-  const { generateArtifacts, artifactsToFiles, mergePlanContent } = await import(
-    pathToFileURL(join(geoKitDist, "index.js")).href
-  );
+  const {
+    generateArtifacts,
+    artifactsToFiles,
+    mergePlanContent,
+    mergeModuleContent,
+  } = await import(pathToFileURL(join(geoKitDist, "index.js")).href);
 
   const contentDir = join(buildDir, "content");
   const basePath = join(contentDir, "site.base.ts");
   const planPath = join(contentDir, "plan.generated.ts");
+  const modulesPath = join(contentDir, "modules.generated.ts");
   const sourcePath = existsSync(basePath) ? basePath : join(contentDir, "site.ts");
 
   const baseMod = await import(pathToFileURL(sourcePath).href);
@@ -245,6 +274,10 @@ async function generateGeoArtifacts(buildDir) {
   if (existsSync(planPath)) {
     const planMod = await import(pathToFileURL(planPath).href);
     content = mergePlanContent(base, planMod.planContent ?? planMod.default);
+  }
+  if (existsSync(modulesPath)) {
+    const modMod = await import(pathToFileURL(modulesPath).href);
+    content = mergeModuleContent(content, modMod.modulePages ?? modMod.default ?? []);
   }
 
   const artifacts = generateArtifacts(content, { includeLlmsFull: true });

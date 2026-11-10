@@ -20,14 +20,22 @@ import {
   PostgresKnowledgeSource,
   applyPlan,
   emptyPlan,
+  isValidPath,
+  materializeModulePlan,
   materializePlan,
+  modulePlanStats,
   planStats,
+  readModulePlan,
   readPlan,
+  renderModuleModule,
   renderPlanModule,
+  validateModulePlan,
   validatePlan,
+  writeModulePlan,
   writePlan,
   type ContentPlan,
   type KnowledgeItem,
+  type ModulePlan,
 } from "@geokit/geo-kit";
 
 import { DATABASE_URL, HAS_DB, HOST, PORT, SITES_DIR, listSites } from "./config.ts";
@@ -381,6 +389,164 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
       await writePlan(dir, plan);
       json(res, 200, { ok: true, stats: planStats(plan) });
+      return;
+    }
+
+    // ── 模块编排（页面 → 模块 → 条目）────────────────────
+    //
+    // 路由设计：整份编排一个 PUT（后台界面自己维护整棵树），
+    // 单条增删改查走同一份 JSON —— 避免多个写入口互相覆盖。
+    // 对后台这种「一次编辑、整体保存」的工具，整体 PUT 最不容易出错。
+
+    // GET /api/sites/:id/modules —— 读模块编排
+    const modulesGet = path.match(/^\/api\/sites\/([^/]+)\/modules$/);
+    if (req.method === "GET" && modulesGet) {
+      const dir = siteDir(modulesGet[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const plan = await readModulePlan(dir, modulesGet[1]);
+      json(res, 200, { plan, stats: modulePlanStats(plan) });
+      return;
+    }
+
+    // PUT /api/sites/:id/modules —— 写模块编排（整份）
+    const modulesPut = path.match(/^\/api\/sites\/([^/]+)\/modules$/);
+    if (req.method === "PUT" && modulesPut) {
+      const dir = siteDir(modulesPut[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const body = await readBody(req);
+      let plan: ModulePlan;
+      try {
+        plan = JSON.parse(body) as ModulePlan;
+      } catch {
+        json(res, 400, { error: "编排不是合法 JSON" });
+        return;
+      }
+      if (!Array.isArray(plan.pages)) {
+        json(res, 400, { error: "编排缺少 pages" });
+        return;
+      }
+      plan.version = 1;
+      plan.siteId = modulesPut[1];
+      plan.updatedAt = new Date().toISOString();
+
+      // 路径合法性 —— 防目录穿越与非法路由
+      const badPath = plan.pages.find((p) => !isValidPath(p.path));
+      if (badPath) {
+        json(res, 400, { error: `页面路径非法：${badPath.path}` });
+        return;
+      }
+
+      await writeModulePlan(dir, plan);
+      json(res, 200, { ok: true, stats: modulePlanStats(plan) });
+      return;
+    }
+
+    // POST /api/sites/:id/modules/preview —— 预览（不落盘）
+    const modulesPreview = path.match(/^\/api\/sites\/([^/]+)\/modules\/preview$/);
+    if (req.method === "POST" && modulesPreview) {
+      const dir = siteDir(modulesPreview[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const kb = await loadKnowledge();
+      if (!kb) {
+        json(res, 503, { error: "知识库不可用" });
+        return;
+      }
+      const allItems = new Map<string, KnowledgeItem>();
+      for (const items of kb.itemsByKb.values()) {
+        for (const i of items) allItems.set(i.id, i);
+      }
+
+      const body = await readBody(req);
+      let plan: ModulePlan;
+      try {
+        plan = JSON.parse(body) as ModulePlan;
+      } catch {
+        json(res, 400, { error: "编排不是合法 JSON" });
+        return;
+      }
+      if (!Array.isArray(plan.pages)) {
+        json(res, 400, { error: "编排缺少 pages" });
+        return;
+      }
+
+      const { pages, skipped } = materializeModulePlan(plan, allItems);
+      json(res, 200, {
+        pages,
+        skipped,
+        problems: validateModulePlan(plan, allItems),
+        stats: modulePlanStats(plan),
+      });
+      return;
+    }
+
+    // POST /api/sites/:id/modules/publish —— 物化 + 落盘
+    //
+    // 产出 content/modules.generated.ts —— 构建时与手写内容包合并。
+    // **不碰 site.ts**（分层铁律）。
+    const modulesPublish = path.match(
+      /^\/api\/sites\/([^/]+)\/modules\/publish$/,
+    );
+    if (req.method === "POST" && modulesPublish) {
+      const dir = siteDir(modulesPublish[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const kb = await loadKnowledge(true);
+      if (!kb) {
+        json(res, 503, { error: "知识库不可用" });
+        return;
+      }
+      const allItems = new Map<string, KnowledgeItem>();
+      for (const items of kb.itemsByKb.values()) {
+        for (const i of items) allItems.set(i.id, i);
+      }
+
+      const plan = await readModulePlan(dir, modulesPublish[1]);
+      const problems = validateModulePlan(plan, allItems);
+      const { pages, skipped } = materializeModulePlan(plan, allItems);
+
+      // 有 error 级问题就不落盘 —— 发布空壳比不发布更糟
+      const errors = problems.filter((p) => p.level === "error");
+      if (errors.length > 0) {
+        json(res, 400, {
+          error: `有 ${errors.length} 个问题未解决 —— 已阻止发布`,
+          problems,
+          skipped,
+        });
+        return;
+      }
+
+      const { writeFile } = await import("node:fs/promises");
+      const outPath = resolve(dir, "content/modules.generated.ts");
+      const module = renderModuleModule(
+        plan,
+        pages,
+        new Date().toISOString(),
+      );
+      await writeFile(outPath, module, "utf8");
+
+      // 顺手把编排本身也写回（发布即定稿）
+      plan.updatedAt = new Date().toISOString();
+      await writeModulePlan(dir, plan);
+
+      json(res, 200, {
+        ok: true,
+        problems,
+        skipped,
+        stats: modulePlanStats(plan),
+        written: outPath,
+        pages: pages.length,
+      });
       return;
     }
 

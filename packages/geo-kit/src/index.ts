@@ -23,6 +23,11 @@ export type {
   PostalAddress,
   AssetContent,
   CtaContent,
+  // 模块化页面（渲染层）
+  PageContent,
+  ContentModule,
+  ContentModuleType,
+  ContentItem,
   SchemaType,
   Platform,
   SiteLocale,
@@ -226,6 +231,72 @@ export {
   mergePlanContent,
   type MaterializedPlan,
 } from "./plan/generate.js";
+
+// ── 富文本（ProseMirror JSON）────────────────────────────
+
+export type {
+  RichTextDoc,
+  RichTextNode,
+  RichTextMark,
+} from "./rich-text/types.js";
+
+export { emptyDoc, isDocEmpty } from "./rich-text/types.js";
+
+export {
+  docToParagraphs,
+  docToPlainText,
+  countWords,
+  readingMinutes,
+} from "./rich-text/convert.js";
+
+export { docToHtml, docToMarkdown, escapeHtml } from "./rich-text/render.js";
+
+// ── 模块编排（页面 → 模块 → 条目）───────────────────────
+
+export type {
+  ModulePlan,
+  PageDef,
+  PageModule,
+  ModuleItem,
+  ModuleType,
+  ItemSource,
+} from "./modules/types.js";
+
+export {
+  MODULE_TYPES,
+  emptyModulePlan,
+  newItemId,
+  newModuleId,
+  newPageId,
+} from "./modules/types.js";
+
+export {
+  validateModulePlan,
+  modulePlanStats,
+  normalizePath,
+  isValidPath,
+  type ValidationProblem,
+} from "./modules/validate.js";
+
+export {
+  materializeModulePlan,
+  materializeModule,
+  materializePage,
+  materializeItem,
+  textToDoc,
+  type MaterializedItem,
+  type MaterializedModule,
+  type MaterializedPage,
+} from "./modules/materialize.js";
+
+export {
+  readModulePlan,
+  writeModulePlan,
+  modulesPath,
+  MODULES_FILENAME,
+} from "./modules/store.js";
+
+export { renderModuleModule, mergeModuleContent } from "./modules/generate.js";
 
 export {
   readPlan,

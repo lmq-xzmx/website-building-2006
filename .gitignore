@@ -23,6 +23,12 @@ logs/
 sites/*/.build/
 sites/*/out/
 
+# 后台编排产物（机器生成，随构建分发，不入版本库）
+sites/*/content/plan.generated.ts
+sites/*/content/modules.generated.ts
+sites/*/plan.json
+sites/*/modules.json
+
 # 内部部署分析（含内网地址与生产机信息）—— 仓库公开，这些不入库
 docs/06-*.md
 docs/_internal/

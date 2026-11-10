@@ -6,6 +6,8 @@
  *   只依赖纯数据 + 标准库。将来加 Astro 模板时核心逻辑零改动。
  */
 
+import type { RichTextDoc } from "./rich-text/types.js";
+
 /** 平台类型 —— 与 geo-platform 的 platform 枚举保持一致的语义子集 */
 export type Platform =
   | "douyin"
@@ -66,6 +68,17 @@ export interface SiteContent {
   /** 站点级导航（页型路由） */
   navigation?: NavItem[];
 
+  /**
+   * 模块化页面 —— 「页面由模块自由组合」的渲染结果。
+   *
+   * 与固定页型（sections / products / cases...）**并存**：
+   *   - 固定页型是骨架里写死的路由，字段固定
+   *   - pages 是后台编排出来的，模块可增删改查、条目可增删改查
+   *
+   * 两套都能用；骨架优先渲染 pages（更灵活），没有的页型走老逻辑。
+   */
+  pages?: PageContent[];
+
   /** 社交账号 —— schema sameAs 的来源 */
   social?: SocialLink[];
 
@@ -100,8 +113,7 @@ export interface OrganizationContent {
  *
  * 「千行万业」意味着客户站不能长得千篇一律。主题只改**令牌**，
  * 不改组件 —— 换主题的边际成本接近零。
- */
-export interface SiteTheme {
+ */export interface SiteTheme {
   /** 主题变体名：default / forest / slate / amber */
   variant?: "default" | "forest" | "slate" | "amber";
   /** 跟随系统深色模式（默认 true） */
@@ -264,6 +276,66 @@ export interface AssetContent {
   logo?: string;
   ogImage?: string;
   favicon?: string;
+}
+
+// ── 模块化页面（渲染层）──────────────────────────────────
+//
+// 这是「编排」物化后的形态：正文已是富文本，条目已排序，草稿已剔除。
+// 骨架直接渲染这些结构 —— 后台看到的 = 页面渲染出来的。
+
+/** 渲染层的模块类型 —— 与编排层的 ModuleType 对应 */
+export type ContentModuleType =
+  | "rich-text"
+  | "card-grid"
+  | "faq"
+  | "stats"
+  | "hero"
+  | "cta"
+  | "gallery";
+
+/** 渲染层的条目 */
+export interface ContentItem {
+  id: string;
+  /** 来源 —— kb = 来自知识库；manual = 后台手工创作 */
+  source: "kb" | "manual";
+  title: string;
+  summary?: string;
+  /** 富文本文档（ProseMirror JSON） */
+  body: RichTextDoc;
+  /** 降级后的纯文本段落 —— GEO 指标按它算 */
+  paragraphs: string[];
+  tags?: string[];
+  image?: string;
+  specs?: Array<{ name: string; value: string; unit?: string }>;
+  client?: string;
+  results?: string[];
+  question?: string;
+  answer?: string;
+  value?: string;
+  unit?: string;
+  label?: string;
+  href?: string;
+  readingMinutes?: number;
+}
+
+/** 渲染层的模块 */
+export interface ContentModule {
+  id: string;
+  type: ContentModuleType;
+  title?: string;
+  subtitle?: string;
+  props?: Record<string, unknown>;
+  items: ContentItem[];
+}
+
+/** 渲染层的页面 */
+export interface PageContent {
+  id: string;
+  /** 路由路径 */
+  path: string;
+  title: string;
+  description?: string;
+  modules: ContentModule[];
 }
 
 /** schema.org 类型（白名单 —— 只允许明确无歧义的类型） */
