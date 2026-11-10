@@ -39,6 +39,19 @@ import {
 } from "@geokit/geo-kit";
 
 import { DATABASE_URL, HAS_DB, HOST, PORT, SITES_DIR, listSites } from "./config.ts";
+import { rebuildSite } from "./build.ts";
+import { writeFile, rm } from "node:fs/promises";
+import {
+  ensureMediaDir,
+  mediaDir,
+  newMediaId,
+  readMediaLibrary,
+  safeMediaName,
+  validateMediaUpload,
+  writeMediaLibrary,
+  MEDIA_DIR,
+  type MediaAsset,
+} from "@geokit/geo-kit";
 import { renderPage } from "./ui.ts";
 import {
   AUTH_ENABLED,
@@ -546,6 +559,22 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       plan.updatedAt = new Date().toISOString();
       await writeModulePlan(dir, plan);
 
+      // ── 第二步：重建站点 ─────────────────────────────
+      //
+      // 物化只是更新了**数据源**（modules.generated.ts）。
+      // 静态站伺服的是 out/ 里的 HTML —— 那是 next build 生成的，
+      // 不重建的话访客看到的还是旧内容。
+      //
+      // 「发布」对用户意味着「我改的东西上线了」—— 只物化不重建不算发布完。
+      //
+      // 跳过的场景：?rebuild=0（只想存产物，自己去构建机重建）
+      const skipRebuild = url.searchParams.get("rebuild") === "0";
+      let rebuild: Awaited<ReturnType<typeof rebuildSite>> | null = null;
+
+      if (!skipRebuild) {
+        rebuild = await rebuildSite(modulesPublish[1]);
+      }
+
       json(res, 200, {
         ok: true,
         problems,
@@ -553,6 +582,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         stats: modulePlanStats(plan),
         written: outPath,
         pages: pages.length,
+        // 重建结果 —— 失败不算发布失败（产物已落盘），
+        // 但必须明确告诉用户「站点还没更新」
+        rebuild,
       });
       return;
     }
@@ -654,6 +686,174 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     if (req.method === "POST" && path === "/api/kb/refresh") {
       kbCache = null;
       await loadKnowledge(true);
+      json(res, 200, { ok: true });
+      return;
+    }
+
+    // ── 媒体库 ─────────────────────────────────────────
+    //
+    // 图片等静态资源的统一管理。
+    // 文件落在站点 public/media/ —— 构建时随 public/ 进静态站，
+    // 所以零额外配置就能被访问。清单落在 media.json。
+
+    // GET /api/sites/:id/media —— 列出资产
+    const mediaGet = path.match(/^\/api\/sites\/([^/]+)\/media$/);
+    if (req.method === "GET" && mediaGet) {
+      const dir = siteDir(mediaGet[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const lib = await readMediaLibrary(dir, mediaGet[1]);
+      json(res, 200, { assets: lib.assets, updatedAt: lib.updatedAt });
+      return;
+    }
+
+    // POST /api/sites/:id/media —— 上传（base64 JSON，不用 multipart）
+    const mediaPost = path.match(/^\/api\/sites\/([^/]+)\/media$/);
+    if (req.method === "POST" && mediaPost) {
+      const dir = siteDir(mediaPost[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const body = await readBody(req);
+      let payload: {
+        filename?: string;
+        mime?: string;
+        data?: string;
+        alt?: string;
+        caption?: string;
+        category?: string;
+      };
+      try {
+        payload = JSON.parse(body) as typeof payload;
+      } catch {
+        json(res, 400, { error: "请求不是合法 JSON" });
+        return;
+      }
+
+      const dataUrl = payload.data ?? "";
+      const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+      if (!base64) {
+        json(res, 400, { error: "缺文件数据" });
+        return;
+      }
+
+      // MIME 由浏览器给出，但**以文件扩展名为准**（有些客户端伪造 MIME）
+      const filename = payload.filename ?? "upload";
+      const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+      const mimeByExt: Record<string, string> = {
+        png: "image/png",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        webp: "image/webp",
+        gif: "image/gif",
+        svg: "image/svg+xml",
+        avif: "image/avif",
+      };
+      const mime = mimeByExt[ext] ?? payload.mime ?? "";
+
+      const buf = Buffer.from(base64, "base64");
+      const problems = validateMediaUpload({
+        filename,
+        mime,
+        size: buf.length,
+        alt: payload.alt,
+      });
+      // alt 缺失只是提醒，其余是硬性拒绝
+      const errors = problems.filter((p) => !p.includes("替代文本"));
+      if (errors.length) {
+        json(res, 400, { error: errors.join("；"), problems });
+        return;
+      }
+
+      const id = newMediaId();
+      const name = safeMediaName(filename);
+      const mediaRoot = await ensureMediaDir(dir);
+      const filePath = resolve(mediaRoot, name);
+      await writeFile(filePath, buf);
+
+      const asset: MediaAsset = {
+        id,
+        url: `/${MEDIA_DIR}/${name}`,
+        filename,
+        mime,
+        size: buf.length,
+        alt: payload.alt ?? "",
+        caption: payload.caption,
+        category: payload.category,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      const lib = await readMediaLibrary(dir, mediaPost[1]);
+      lib.assets.push(asset);
+      lib.updatedAt = new Date().toISOString();
+      await writeMediaLibrary(dir, lib);
+
+      json(res, 200, { ok: true, asset, warnings: problems });
+      return;
+    }
+
+    // PUT /api/sites/:id/media/:assetId —— 改 alt / 说明 / 分类
+    const mediaPut = path.match(/^\/api\/sites\/([^/]+)\/media\/([^/]+)$/);
+    if (req.method === "PUT" && mediaPut) {
+      const dir = siteDir(mediaPut[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const body = await readBody(req);
+      let patch: Partial<MediaAsset>;
+      try {
+        patch = JSON.parse(body) as Partial<MediaAsset>;
+      } catch {
+        json(res, 400, { error: "请求不是合法 JSON" });
+        return;
+      }
+      const lib = await readMediaLibrary(dir, mediaPut[1]);
+      const asset = lib.assets.find((a) => a.id === mediaPut[2]);
+      if (!asset) {
+        json(res, 404, { error: "资产不存在" });
+        return;
+      }
+      if (patch.alt !== undefined) asset.alt = patch.alt;
+      if (patch.caption !== undefined) asset.caption = patch.caption;
+      if (patch.category !== undefined) asset.category = patch.category;
+      if (patch.filename !== undefined) asset.filename = patch.filename;
+      lib.updatedAt = new Date().toISOString();
+      await writeMediaLibrary(dir, lib);
+      json(res, 200, { ok: true, asset });
+      return;
+    }
+
+    // DELETE /api/sites/:id/media/:assetId —— 删资产（连文件一起删）
+    const mediaDel = path.match(/^\/api\/sites\/([^/]+)\/media\/([^/]+)$/);
+    if (req.method === "DELETE" && mediaDel) {
+      const dir = siteDir(mediaDel[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const lib = await readMediaLibrary(dir, mediaDel[1]);
+      const idx = lib.assets.findIndex((a) => a.id === mediaDel[2]);
+      if (idx < 0) {
+        json(res, 404, { error: "资产不存在" });
+        return;
+      }
+      const asset = lib.assets[idx];
+      lib.assets.splice(idx, 1);
+      lib.updatedAt = new Date().toISOString();
+      await writeMediaLibrary(dir, lib);
+
+      // 文件删掉（不在清单里的孤儿文件不管）
+      try {
+        await rm(resolve(mediaDir(dir), asset.url.split("/").pop() ?? ""), {
+          force: true,
+        });
+      } catch {
+        /* 文件删不掉不阻塞 —— 清单已更新 */
+      }
       json(res, 200, { ok: true });
       return;
     }

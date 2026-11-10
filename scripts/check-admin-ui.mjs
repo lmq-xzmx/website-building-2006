@@ -51,13 +51,14 @@ for (const name of requiredGlobals) {
 // ── 3. 关键 DOM id ──────────────────────────────────────
 const ids = [
   "site", "kb", "q", "reload", "save", "publish", "who",
-  "tabPlan", "tabModule", "tabWechat", "modulePane", "wechatPane",
+  "tabPlan", "tabModule", "tabWechat", "tabMedia", "modulePane", "wechatPane", "mediaPane",
   "modAddPage", "modPageList",
   "modAddModule", "modModuleList",
   "modAddManual", "modItemList", "modItemCount",
-  "modEditor", "modSave", "modLook",
+  "modEditor", "modSave", "modPublish", "modLook",
   "kbList", "kbCount", "planList", "planCount", "checkPane",
   "wcSide", "wcPreview", "wcCopyRich", "wcCopyPlain",
+  "mediaGrid", "mediaQ", "mediaCat", "mediaUpload", "mediaFile",
   "toast",
 ];
 for (const id of ids) {
@@ -94,6 +95,8 @@ const builtin = new Set([
   "URLSearchParams", "AbortController", "TextEncoder", "TextDecoder",
   // CSS 函数名 —— 出现在 style 字符串里，不是 JS 调用
   "gradient", "translateX", "translateY", "scale", "rotate", "var", "calc",
+  // Promise 构造器的回调参数与浏览器 API
+  "resolve", "reject", "prompt", "confirm", "alert", "open",
 ]);
 
 for (const name of called) {

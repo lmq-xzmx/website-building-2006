@@ -21,6 +21,11 @@ import {
   WECHAT_PANEL_HTML,
   WECHAT_PANEL_SCRIPT,
 } from "./wechat-ui.ts";
+import {
+  MEDIA_PANEL_CSS,
+  MEDIA_PANEL_HTML,
+  MEDIA_PANEL_SCRIPT,
+} from "./media-ui.ts";
 
 export async function renderPage(user?: {
   displayName?: string;
@@ -115,6 +120,7 @@ export async function renderPage(user?: {
   code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
   ${MODULE_PANEL_CSS}
   ${WECHAT_PANEL_CSS}
+  ${MEDIA_PANEL_CSS}
 </style>
 </head>
 <body>
@@ -124,6 +130,7 @@ export async function renderPage(user?: {
     <button id="tabPlan" class="tab on">编排台</button>
     <button id="tabModule" class="tab">模块</button>
     <button id="tabWechat" class="tab">公众号</button>
+    <button id="tabMedia" class="tab">媒体</button>
   </div>
   <label>站点 <select id="site"></select></label>
   <label>知识库 <select id="kb"></select></label>
@@ -155,6 +162,8 @@ export async function renderPage(user?: {
 ${MODULE_PANEL_HTML}
 
 ${WECHAT_PANEL_HTML}
+
+${MEDIA_PANEL_HTML}
 
 <div class="toast" id="toast"></div>
 
@@ -459,6 +468,8 @@ ${MODULE_PANEL_SCRIPT}
 
 ${WECHAT_PANEL_SCRIPT}
 
+${MEDIA_PANEL_SCRIPT}
+
 <script>
 // ── 视图切换 ────────────────────────────────────────────
 let currentView = "plan";
@@ -468,13 +479,18 @@ function switchView(v) {
   document.querySelector("main").hidden = v !== "plan";
   document.getElementById("modulePane").hidden = v !== "module";
   document.getElementById("wechatPane").hidden = v !== "wechat";
+  document.getElementById("mediaPane").hidden = v !== "media";
   document.getElementById("tabPlan").classList.toggle("on", v === "plan");
   document.getElementById("tabModule").classList.toggle("on", v === "module");
   document.getElementById("tabWechat").classList.toggle("on", v === "wechat");
+  document.getElementById("tabMedia").classList.toggle("on", v === "media");
   // 编排台专属按钮在模块视图下无意义
   document.getElementById("save").hidden = v !== "plan";
   document.getElementById("publish").hidden = v !== "plan";
   if (v === "module") loadModules();
+  if (v === "media") {
+    if (typeof loadMedia === "function") loadMedia();
+  }
   if (v === "wechat") {
     // 公众号排版要基于「当前选中的条目」—— 先确保模块数据已加载
     if (typeof loadModules === "function" && !modPlan) loadModules();
@@ -487,11 +503,14 @@ function switchView(v) {
 document.getElementById("tabPlan").addEventListener("click", () => switchView("plan"));
 document.getElementById("tabModule").addEventListener("click", () => switchView("module"));
 document.getElementById("tabWechat").addEventListener("click", () => switchView("wechat"));
+document.getElementById("tabMedia").addEventListener("click", () => switchView("media"));
 
 // 模块面板的绑定（在 MODULE_PANEL_SCRIPT 之后执行）
 if (typeof bindModulePanel === "function") bindModulePanel();
 // 公众号排版面板的绑定（在 WECHAT_PANEL_SCRIPT 之后执行）
 if (typeof bindWechatPanel === "function") bindWechatPanel();
+// 媒体库面板的绑定（在 MEDIA_PANEL_SCRIPT 之后执行）
+if (typeof bindMediaPanel === "function") bindMediaPanel();
 </script>
 </body>
 </html>

@@ -43,7 +43,8 @@ export const MODULE_PANEL_HTML = `
   <aside class="mod-edit">
     <div class="pane-head">
       <h2>编辑</h2><span class="sp"></span>
-      <button id="modSave" class="primary">保存编排</button>
+      <button id="modSave">保存编排</button>
+      <button id="modPublish" class="primary">发布并重建</button>
     </div>
     <div class="pane-body" id="modEditor"></div>
   </aside>
@@ -164,6 +165,10 @@ const MOD_TYPE_LABEL = {
   "hero": "英雄区",
   "cta": "行动号召",
   "gallery": "图片",
+  "trust": "信任背书",
+  "logo-wall": "客户 Logo 墙",
+  "process": "流程步骤",
+  "form": "留言表单",
 };
 const CARD_KIND_LABEL = { products: "产品", cases: "案例", insights: "洞察", generic: "通用" };
 
@@ -178,6 +183,18 @@ function mUid(prefix) {
 
 function curPage() {
   return (modPlan?.pages ?? []).find((p) => p.id === curPageId) ?? null;
+}
+
+/** 页面在栏目树里的深度 —— 0 = 顶级 */
+function pageDepth(id) {
+  let d = 0;
+  let cur = (modPlan?.pages ?? []).find((p) => p.id === id);
+  // 防环（父指针指错时会死循环）—— 最多数 20 层
+  while (cur?.parentId && d < 20) {
+    cur = (modPlan?.pages ?? []).find((p) => p.id === cur.parentId);
+    d++;
+  }
+  return d;
 }
 function curModule() {
   const p = curPage();
@@ -210,6 +227,8 @@ function renderModules() {
   renderLook();
   // 富文本编辑器要在 DOM 建好之后再挂
   mountEditor(curItem());
+  // 图片选择器要用媒体库数据
+  renderImagePicker(curItem());
 }
 
 // ── 外观设置（布局变体 / 质感 / 色板）────────────────────
@@ -276,10 +295,22 @@ function renderPageList() {
   el.innerHTML = pages.map((p) => {
     const mods = (p.modules ?? []).length;
     const items = (p.modules ?? []).reduce((n, m) => n + (m.items ?? []).length, 0);
-    return '<div class="mrow' + (p.id === curPageId ? " sel" : "") + '" data-page="' + mEsc(p.id) + '">' +
-      '<div class="t">' + mEsc(p.title || p.path) + "</div>" +
+    // 层级缩进 —— 栏目树
+    const depth = pageDepth(p.id);
+    const indent = depth ? "padding-left:" + (8 + depth * 14) + "px" : "";
+    // 定时状态
+    let sched = "";
+    if (p.publishAt) {
+      const due = Date.parse(p.publishAt) <= Date.now();
+      sched = '<span class="pill ' + (due ? "ok" : "warn") + '">' +
+        (due ? "已定时" : "待发布") + "</span>";
+    }
+    return '<div class="mrow' + (p.id === curPageId ? " sel" : "") + '" data-page="' + mEsc(p.id) + '" style="' + indent + '">' +
+      '<div class="t">' + (p.sticky ? "📌 " : "") + mEsc(p.title || p.path) + "</div>" +
       '<div class="m">' +
       (p.published ? '<span class="pill ok">发布</span>' : '<span class="pill warn">草稿</span>') +
+      (p.inNav === false ? '<span class="pill">不导航</span>' : "") +
+      sched +
       '<span class="pill">' + mEsc(p.path) + "</span>" +
       '<span class="pill">' + mods + " 模块 / " + items + " 条</span>" +
       "</div>" +
@@ -339,13 +370,20 @@ function renderItemList() {
       ? items.map((i) => {
           const kb = i.source === "kb" ? kbItems.find((x) => x.id === i.kbItemId) : null;
           const title = i.title || i.question || kb?.title || i.id;
+          let sched = "";
+          if (i.publishAt) {
+            const due = Date.parse(i.publishAt) <= Date.now();
+            sched = '<span class="pill ' + (due ? "ok" : "warn") + '">' +
+              (due ? "已定时" : "待发布") + "</span>";
+          }
           return '<div class="mrow' + (i.id === curItemId ? " sel" : "") + '" data-item="' + mEsc(i.id) + '">' +
-            '<div class="t">' + mEsc(title) + "</div>" +
+            '<div class="t">' + (i.sticky ? "📌 " : "") + mEsc(title) + "</div>" +
             '<div class="m">' +
             (i.source === "kb"
               ? '<span class="pill ok">知识库</span>'
               : '<span class="pill">手工</span>') +
             (i.published ? '<span class="pill ok">发布</span>' : '<span class="pill warn">草稿</span>') +
+            sched +
             '<span class="pill">序 ' + i.order + "</span>" +
             "</div>" +
             '<div class="m" style="margin-top:5px">' +
@@ -372,20 +410,38 @@ function renderModuleEditor() {
 }
 
 function pageEditorHtml(p) {
+  // 父页面下拉 —— 构成栏目树
+  const others = (modPlan?.pages ?? []).filter((x) => x.id !== p.id);
+  const parentOpts =
+    '<option value="">（顶级栏目）</option>' +
+    others.map((x) =>
+      '<option value="' + mEsc(x.id) + '"' + (p.parentId === x.id ? " selected" : "") + ">" +
+      mEsc(x.title || x.path) + "</option>").join("");
+
   return '<div class="mform">' +
     '<div><label>页面标题</label><input id="me-page-title" value="' + mEsc(p.title) + '" /></div>' +
     '<div><label>路由路径</label><input id="me-page-path" value="' + mEsc(p.path) + '" placeholder="/about" />' +
     '<div class="hint">相对站点根；发布后成为真实路由</div></div>' +
     '<div><label>页面描述（每页必须有自己的一份）</label>' +
     '<textarea id="me-page-desc" rows="3">' + mEsc(p.description ?? "") + "</textarea></div>" +
+    '<div><label>父页面（栏目层级）</label><select id="me-page-parent">' + parentOpts + "</select>" +
+    '<div class="hint">企业门户常见结构：产品服务（父）→ 三个子产品页</div></div>' +
+    '<div class="row2">' +
+    '<div><label>定时发布</label><input id="me-page-publish-at" type="datetime-local" value="' +
+      mEsc((p.publishAt ?? "").slice(0, 16)) + '" /></div>' +
+    '<div><label>导航显示</label><select id="me-page-in-nav">' +
+    '<option value="1"' + (p.inNav !== false ? " selected" : "") + ">显示</option>" +
+    '<option value="0"' + (p.inNav === false ? " selected" : "") + ">隐藏</option>" +
+    "</select></div></div>" +
     '<div class="actions">' +
+    '<button id="me-page-sticky">' + (p.sticky ? "取消置顶" : "置顶") + "</button>" +
     '<button id="me-page-save" class="primary">应用到页面</button>' +
     "</div></div>";
 }
 
 function moduleEditorHtml(m, page) {
   const kind = String(m.props?.kind ?? "");
-  return '<div class="mform">' +
+  let h = '<div class="mform">' +
     '<div><label>模块标题</label><input id="me-mod-title" value="' + mEsc(m.title ?? "") + '" /></div>' +
     '<div><label>副标题</label><input id="me-mod-sub" value="' + mEsc(m.subtitle ?? "") + '" /></div>' +
     '<div class="row2">' +
@@ -396,8 +452,21 @@ function moduleEditorHtml(m, page) {
     '<div><label>卡片类型（card-grid 用）</label><select id="me-mod-kind">' +
     Object.entries(CARD_KIND_LABEL).map(([k, v]) =>
       '<option value="' + k + '"' + (kind === k ? " selected" : "") + ">" + v + "</option>").join("") +
-    "</select></div></div>" +
-    '<div class="row2">' +
+    "</select></div></div>";
+
+  // 表单模块：字段定义在模块 props 里 —— 一行一个字段
+  if (m.type === "form") {
+    const fields = m.props?.fields ?? [];
+    const lines = fields.map((f) =>
+      [f.name, f.label, f.type ?? "text", f.required ? "必填" : "选填",
+        (f.options ?? []).join("|"), f.placeholder ?? ""].join(",")).join("\\n");
+    h += '<div><label>表单字段（一行一个：字段名,标签,类型,必填/选填,选项(用|分隔),占位提示）</label>' +
+      '<textarea id="me-mod-fields" rows="5" placeholder="姓名,您的称呼,text,必填,,请输入姓名&#10;手机,联系电话,tel,必填,,&#10;需求,需求描述,textarea,选填,,简单描述">' +
+      mEsc(lines) + "</textarea>" +
+      '<div class="hint">必填项总数控制在 3–5 个 —— 多了转化率掉。类型可选 text / tel / email / url / textarea / select</div></div>';
+  }
+
+  h += '<div class="row2">' +
     '<div><label>排序</label><input id="me-mod-order" type="number" value="' + m.order + '" /></div>' +
     '<div><label>状态</label><select id="me-mod-enabled">' +
     '<option value="1"' + (m.enabled ? " selected" : "") + ">启用</option>" +
@@ -405,6 +474,7 @@ function moduleEditorHtml(m, page) {
     "</select></div></div>" +
     '<div class="actions"><button id="me-mod-save" class="primary">应用到模块</button></div>' +
     "</div>";
+  return h;
 }
 
 function itemEditorHtml(i, m) {
@@ -436,6 +506,15 @@ function itemEditorHtml(i, m) {
       mEsc(i.summary ?? "") + "</textarea></div>";
   }
 
+  // 图片 —— 从媒体库选，或直接填外链
+  //
+  // 媒体库优先：图片收进站点自己的 public/media/，
+  // 换 CDN 不用逐条改，外链挂了也不会空图。
+  h += '<div><label>图片</label>' +
+    '<div id="me-item-image-pick"></div>' +
+    '<input id="me-item-image" value="' + mEsc(i.image ?? "") + '" placeholder="/media/xxx.png 或外链 URL" />' +
+    "</div>";
+
   if (isHero) {
     h += '<div class="hint">英雄区的标题就是 H1 —— 缺了 AI 没有可摘的定位句</div>';
   }
@@ -465,6 +544,28 @@ function itemEditorHtml(i, m) {
       '<textarea id="me-item-specs" rows="3">' + mEsc(specs) + "</textarea></div>";
   }
 
+  // 信任背书 / Logo 墙 —— 图片语义靠 alt，缺了读屏与 AI 都拿不到信息
+  if (m?.type === "trust" || m?.type === "logo-wall") {
+    h += '<div><label>图片替代文本（alt）</label>' +
+      '<input id="me-item-alt" value="' + mEsc(i.alt ?? "") + '" placeholder="一句话说明这张图是什么" />' +
+      '<div class="hint">必填 —— 无障碍与 AI 识图都靠它</div></div>';
+  }
+  if (m?.type === "logo-wall") {
+    h += '<div><label>客户名</label><input id="me-item-client" value="' + mEsc(i.client ?? "") + '" /></div>';
+  }
+  if (m?.type === "trust") {
+    h += '<div><label>图注</label>' +
+      '<input id="me-item-caption" value="' + mEsc(i.caption ?? "") + '" placeholder="如：ISO 27001 认证（2024）" /></div>';
+  }
+  if (m?.type === "process") {
+    h += '<div><label>步骤序号</label>' +
+      '<input id="me-item-step" type="number" value="' + (i.step ?? 0) + '" /></div>' +
+      '<div class="hint">序号从 1 开始 —— 乱了流程就讲不通</div>';
+  }
+  if (m?.type === "form") {
+    h += '<div class="hint">表单模块的条目写「提交之后会发生什么」—— 例如：我们会在 1 个工作日内联系您</div>';
+  }
+
   if (!isKb) {
     h += '<div><label>正文（富文本）</label><div id="me-item-body"></div>' +
       '<div class="hint">块类型可在工具条切换；存储是 ProseMirror JSON，AI 能精确引用到段落</div></div>';
@@ -475,7 +576,14 @@ function itemEditorHtml(i, m) {
     '<div><label>状态</label><select id="me-item-published">' +
     '<option value="1"' + (i.published ? " selected" : "") + ">发布</option>" +
     '<option value="0"' + (!i.published ? " selected" : "") + ">草稿</option>" +
-    "</select></div></div>";
+    "</select></div></div>" +
+    '<div><label>定时发布</label>' +
+    '<input id="me-item-publish-at" type="datetime-local" value="' +
+    mEsc((i.publishAt ?? "").slice(0, 16)) + '" />' +
+    '<div class="hint">留空 = 立即发布；到点自动生效（每次发布时判断，不需要后台定时任务）</div></div>' +
+    '<div class="actions">' +
+    '<button id="me-item-sticky">' + (i.sticky ? "取消置顶" : "置顶") + "</button>" +
+    "</div>";
 
   h += '<div class="actions">' +
     '<button id="me-item-save" class="primary">应用到条目</button>' +
@@ -493,6 +601,36 @@ function mountEditor(item) {
   const root = host.querySelector(".rte");
   // write 负责把内容填进各块（__rteHtml 只出骨架）
   if (root) window.__rte.write(root, item.body);
+}
+
+// ── 图片选择器（从媒体库挑）──────────────────────────────
+function renderImagePicker(item) {
+  const host = document.getElementById("me-item-image-pick");
+  if (!host) return;
+  const assets = (typeof window !== "undefined" && window.mediaAssets) || [];
+
+  if (!assets.length) {
+    host.innerHTML =
+      '<div class="hint">媒体库还没有图片 —— 切到「媒体」标签页上传' +
+      '（也可以直接在上面填外链 URL）</div>';
+    return;
+  }
+
+  host.innerHTML =
+    '<div class="hint" style="margin-bottom:4px">从媒体库选：</div>' +
+    '<select id="me-item-image-select" style="width:100%;margin-bottom:5px">' +
+    '<option value="">（不选）</option>' +
+    assets.map((a) =>
+      '<option value="' + mEsc(a.url) + '"' +
+      (item.image === a.url ? " selected" : "") + ">" +
+      mEsc(a.filename) + (a.alt ? " — " + mEsc(a.alt).slice(0, 20) : "") +
+      "</option>").join("") +
+    "</select>" +
+    (item.image
+      ? '<div style="margin-top:4px"><img src="' + mEsc(item.image) +
+        '" alt="" style="max-height:90px;max-width:100%;border-radius:6px;' +
+        'border:1px solid var(--line)" /></div>'
+      : "");
 }
 
 /** 读回编辑器内容 */
@@ -648,6 +786,16 @@ function bindModulePanel() {
   });
 
   // 编辑区
+  // 媒体库选择器联动：下拉选了 → 填进图片输入框
+  document.getElementById("modEditor").addEventListener("change", (e) => {
+    if (e.target.id !== "me-item-image-select") return;
+    const input = document.getElementById("me-item-image");
+    if (input) input.value = e.target.value;
+    const it = curItem();
+    if (it) it.image = e.target.value || undefined;
+    renderImagePicker(it);
+  });
+
   document.getElementById("modEditor").addEventListener("click", (e) => {
     const t = e.target;
     if (t.id === "me-page-save") {
@@ -655,6 +803,18 @@ function bindModulePanel() {
       p.title = document.getElementById("me-page-title").value;
       p.path = document.getElementById("me-page-path").value;
       p.description = document.getElementById("me-page-desc").value;
+      const parent = document.getElementById("me-page-parent");
+      if (parent) p.parentId = parent.value || undefined;
+      const inNav = document.getElementById("me-page-in-nav");
+      if (inNav) p.inNav = inNav.value === "1";
+      const at = document.getElementById("me-page-publish-at");
+      if (at) p.publishAt = at.value ? new Date(at.value).toISOString() : undefined;
+      renderModules();
+      return;
+    }
+    if (t.id === "me-page-sticky") {
+      const p = curPage(); if (!p) return;
+      p.sticky = !p.sticky;
       renderModules();
       return;
     }
@@ -664,6 +824,27 @@ function bindModulePanel() {
       m.subtitle = document.getElementById("me-mod-sub").value;
       m.type = document.getElementById("me-mod-type").value;
       m.props = { ...(m.props ?? {}), kind: document.getElementById("me-mod-kind").value };
+      // 表单字段（一行一个：名称,标签,类型,必填/选填,选项|分隔,占位提示）
+      const fieldsInput = document.getElementById("me-mod-fields");
+      if (fieldsInput) {
+        const fields = fieldsInput.value.split("\\n")
+          .map((line) => line.trim()).filter(Boolean)
+          .map((line) => {
+            const p = line.split(",").map((x) => x.trim());
+            const opts = (p[4] ?? "").split("|").map((x) => x.trim()).filter(Boolean);
+            const f = {
+              name: p[0] ?? "",
+              label: p[1] ?? "",
+              type: p[2] || "text",
+              required: (p[3] ?? "") === "必填",
+              placeholder: p[5] ?? "",
+            };
+            if (opts.length) f.options = opts;
+            return f;
+          })
+          .filter((f) => f.name);
+        m.props.fields = fields;
+      }
       m.order = Number(document.getElementById("me-mod-order").value) || 0;
       m.enabled = document.getElementById("me-mod-enabled").value === "1";
       renderModules();
@@ -685,6 +866,9 @@ function bindModulePanel() {
       if (document.getElementById("me-item-label")) i.label = document.getElementById("me-item-label").value;
       if (document.getElementById("me-item-href")) i.href = document.getElementById("me-item-href").value;
       if (document.getElementById("me-item-client")) i.client = document.getElementById("me-item-client").value;
+      if (document.getElementById("me-item-alt")) i.alt = document.getElementById("me-item-alt").value;
+      if (document.getElementById("me-item-caption")) i.caption = document.getElementById("me-item-caption").value;
+      if (document.getElementById("me-item-step")) i.step = Number(document.getElementById("me-item-step").value) || 0;
       if (document.getElementById("me-item-results")) {
         i.results = document.getElementById("me-item-results").value.split("\\n").map((x) => x.trim()).filter(Boolean);
       }
@@ -700,8 +884,18 @@ function bindModulePanel() {
       }
       const body = readEditorBody();
       if (body) i.body = body;
+      const imgInput = document.getElementById("me-item-image");
+      if (imgInput) i.image = imgInput.value.trim() || undefined;
       i.order = Number(document.getElementById("me-item-order").value) || 0;
       i.published = document.getElementById("me-item-published").value === "1";
+      const at = document.getElementById("me-item-publish-at");
+      if (at) i.publishAt = at.value ? new Date(at.value).toISOString() : undefined;
+      renderModules();
+      return;
+    }
+    if (t.id === "me-item-sticky") {
+      const i = curItem(); if (!i) return;
+      i.sticky = !i.sticky;
       renderModules();
       return;
     }
@@ -752,6 +946,71 @@ function bindModulePanel() {
     modStats = d.stats;
     toast("编排已保存 → modules.json");
   });
+
+  // ── 发布并重建 ─────────────────────────────────────
+  //
+  // 「发布」= 物化（写 modules.generated.ts）+ 重建（next build 出 HTML）。
+  // 只物化不重建的话，访客看到的还是旧内容 —— 静态站伺服的是构建产物。
+  on("modPublish", "click", async () => {
+    if (!siteId) return;
+    const btn = $("modPublish");
+    btn.disabled = true;
+    btn.textContent = "发布中…";
+    try {
+      const r = await fetch(
+        "/api/sites/" + encodeURIComponent(siteId) + "/modules/publish",
+        { method: "POST" },
+      );
+      const d = await r.json();
+      if (d.error) {
+        toast(d.error, true);
+        if (d.problems) showPublishProblems(d.problems);
+        return;
+      }
+      modStats = d.stats;
+
+      const rb = d.rebuild;
+      if (!rb) {
+        toast("已发布（未重建）—— 站点内容未更新");
+      } else if (rb.ok) {
+        toast("已发布并重建 —— " + (rb.pages ?? "?") + " 个页面，用时 " +
+              Math.round(rb.ms / 1000) + " 秒");
+      } else {
+        toast("编排已发布，但站点重建失败 —— " + (rb.reason ?? "未知原因"), true);
+        showRebuildOutput(rb);
+      }
+    } catch (e) {
+      toast("发布失败：" + (e instanceof Error ? e.message : String(e)), true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "发布并重建";
+    }
+  });
+
+  /** 展示校验问题 */
+  function showPublishProblems(problems) {
+    const pane = $("modEditor");
+    if (!pane) return;
+    pane.innerHTML =
+      '<div class="mgroup"><h3>发布被拦下</h3>' +
+      problems.map((p) =>
+        '<div class="problem' + (p.level === "warn" ? " warn" : "") + '">' +
+        "<b>" + (p.itemTitle || p.moduleTitle || "") + "</b> —— " + p.message +
+        "</div>").join("") +
+      "</div>";
+  }
+
+  /** 展示构建输出 */
+  function showRebuildOutput(rb) {
+    const pane = $("modEditor");
+    if (!pane) return;
+    pane.innerHTML =
+      '<div class="mgroup"><h3>构建失败</h3>' +
+      '<div class="problem">' + (rb.reason ?? "") + "</div>" +
+      '<pre style="font-size:11px;white-space:pre-wrap;color:var(--dim);' +
+      'max-height:320px;overflow:auto">' +
+      String(rb.output ?? "").slice(-3000) + "</pre></div>";
+  }
 
   // 知识库条目「加入模块」：知识库列表的按钮事件在 ui.ts 里，
   // 那里检测到当前在模块视图时调这个函数
