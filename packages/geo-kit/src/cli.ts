@@ -55,6 +55,19 @@ async function loadContent(path: string): Promise<SiteContent> {
   return content as SiteContent;
 }
 
+/**
+ * 加载计划模块 —— 导出名是 planContent（不是 site/default）。
+ */
+async function loadPlanContent(path: string): Promise<unknown> {
+  const abs = resolve(path);
+  const mod = await import(pathToFileURL(abs).href);
+  const planned = mod.planContent ?? mod.default;
+  if (!planned) {
+    throw new Error(`${path} 未导出计划内容（planContent / default）`);
+  }
+  return planned;
+}
+
 async function cmdGenerate(args: Args): Promise<void> {
   const contentPath = args.positional[0];
   if (!contentPath) {
@@ -104,13 +117,32 @@ async function cmdGenerate(args: Args): Promise<void> {
 async function cmdAudit(args: Args): Promise<void> {
   const url = args.positional[0];
   if (!url) {
-    console.error("用法：geo-kit audit <url> [--content content.ts] [--json] [--full]");
+    console.error(
+      "用法：geo-kit audit <url> [--content content.ts] [--plan plan.generated.ts] [--json] [--full]",
+    );
     process.exit(1);
   }
 
-  const content = args.flags.content
+  let content = args.flags.content
     ? await loadContent(args.flags.content as string)
     : undefined;
+
+  // --plan：把后台编排的内容合并进来再体检。
+  //
+  // 为什么需要：站点内容分两层 —— 手写内容包 + 机器编排内容。
+  // 只传 --content（手写层）去体检，会把编排出来的页面判成
+  // 「访问到但不在内容包」（B 维度扣分）—— 假阳性。
+  //
+  // 合并用 mergePlanContent，与构建时同一套逻辑 ——
+  // 保证「体检看到的」与「构建出来的」完全一致。
+  if (args.flags.plan && content) {
+    const planned = await loadPlanContent(args.flags.plan as string);
+    const { mergePlanContent } = await import("./plan/generate.js");
+    content = mergePlanContent(
+      content,
+      planned as Parameters<typeof mergePlanContent>[1],
+    );
+  }
 
   // --full：站级体检 —— 抓取全站页面并做跨页检查
   if (args.flags.full) {
