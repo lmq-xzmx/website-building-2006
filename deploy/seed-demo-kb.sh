@@ -20,9 +20,10 @@ KB_NAME=${KB_NAME:-"建站示范库"}
 
 echo "== 1. 建示范知识库 =="
 docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -v ON_ERROR_STOP=1 <<'SQL'
+-- ⚠️ knowledge_bases.id 是 varchar(36) 不是 uuid —— 用 varchar 比较
 DO $$
 DECLARE
-  kb_id uuid := 'a1b2c3d4-0000-4000-8000-000000000001';
+  kb_id varchar(36) := 'a1b2c3d4-0000-4000-8000-000000000001';
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM knowledge_bases WHERE id = kb_id) THEN
     INSERT INTO knowledge_bases (id, name, description, item_count, kb_type, sync_strategy)
