@@ -155,6 +155,8 @@ img {
   justify-content: center;
   gap: var(--space-2);
   padding: 0.65rem 1.35rem;
+  /* 点击区不小于 44px —— 移动端手指够不着的小按钮是最常见的可用性硬伤 */
+  min-height: 44px;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-weight: 600;
@@ -169,6 +171,13 @@ img {
     color var(--duration-fast) var(--ease-out),
     box-shadow var(--duration-fast) var(--ease-out),
     transform var(--duration-fast) var(--ease-out);
+}
+
+/* 触屏上再放大一档 —— 拇指操作的舒适区是 48px */
+@media (pointer: coarse) {
+  .btn {
+    min-height: 48px;
+  }
 }
 
 .btn:active {
@@ -542,7 +551,8 @@ img {
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   padding: 0.7rem 0.9rem;
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
@@ -556,7 +566,8 @@ img {
 }
 
 .field input:focus,
-.field textarea:focus {
+.field textarea:focus,
+.field select:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
@@ -571,6 +582,68 @@ img {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
   margin: 0;
+}
+
+/* ── 客户 logo 墙 ───────────────────────────────────────── */
+
+/*
+   logo 墙是「别人替我背书」—— 尺寸与色调不统一，
+   一排大小不一的图会显得像东拼西凑，反而降低可信度。
+*/
+.logo-wall {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-6) 0;
+}
+
+.logo-item {
+  height: 40px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
+  filter: grayscale(1);
+  opacity: 0.75;
+  transition:
+    filter var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.logo-item:hover {
+  filter: none;
+  opacity: 1;
+}
+
+/* ── 流程步骤 ───────────────────────────────────────────── */
+
+.process-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-6);
+}
+
+/* 序号列固定宽度 —— 标题左边缘对齐，读起来是一列 */
+.process-step {
+  display: grid;
+  grid-template-columns: 3rem 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* 序号做成圆形徽标 —— 「第几步」本身就是信息，要一眼看出来 */
+.process-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-subtle);
+  color: var(--color-text-primary);
+  font-weight: 700;
 }
 
 /* ── 文章 ───────────────────────────────────────────────── */

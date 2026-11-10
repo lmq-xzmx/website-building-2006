@@ -314,7 +314,11 @@ export type ContentModuleType =
   | "stats"
   | "hero"
   | "cta"
-  | "gallery";
+  | "gallery"
+  | "trust"
+  | "logo-wall"
+  | "process"
+  | "form";
 
 /** 渲染层的条目 */
 export interface ContentItem {
@@ -338,6 +342,12 @@ export interface ContentItem {
   unit?: string;
   label?: string;
   href?: string;
+  /** trust / logo-wall：图片替代文本 */
+  alt?: string;
+  /** trust：图注 */
+  caption?: string;
+  /** process：步骤序号 */
+  step?: number;
   readingMinutes?: number;
 }
 

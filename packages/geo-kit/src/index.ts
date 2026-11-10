@@ -113,6 +113,30 @@ export {
   type SitePageAudit,
 } from "./audit/site.js";
 
+// ── UX 体检（人能否转化）────────────────────────────────────
+
+export {
+  auditUx,
+  auditUxHtml,
+  extractUxFacts,
+  contrastRatio,
+  UX_DIMENSIONS,
+  type UxAuditInput,
+  type UxAuditOptions,
+  type UxAuditResult,
+  type UxCheck,
+  type UxStatus,
+  type UxDimensionKey,
+  type UxDimensionResult,
+  type UxPageFacts,
+  type UxPageResult,
+  type UxImageFact,
+  type UxLinkFact,
+  type UxFormFact,
+  type UxStyleFacts,
+  type UxNavFacts,
+} from "./audit/ux.js";
+
 export {
   crawlSite,
   parseSitemapUrls,
@@ -279,6 +303,7 @@ export type {
   ModuleItem,
   ModuleType,
   ItemSource,
+  FormFieldDef,
 } from "./modules/types.js";
 
 export {
@@ -327,3 +352,30 @@ export {
   planPath,
   PLAN_FILENAME,
 } from "./plan/store.js";
+
+// ── 媒体库 ──────────────────────────────────────────────
+
+export type {
+  MediaAsset,
+  MediaLibrary,
+} from "./media/types.js";
+
+export {
+  emptyMediaLibrary,
+  newMediaId,
+  safeMediaName,
+  validateMediaUpload,
+  ALLOWED_MIME,
+  ALLOWED_EXT,
+  MAX_MEDIA_SIZE,
+} from "./media/types.js";
+
+export {
+  readMediaLibrary,
+  writeMediaLibrary,
+  mediaPath,
+  mediaDir,
+  ensureMediaDir,
+  MEDIA_FILENAME,
+  MEDIA_DIR,
+} from "./media/store.js";

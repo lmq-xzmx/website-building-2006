@@ -81,6 +81,9 @@ function materializeKbItem(
   if (item.value) out.value = item.value;
   if (item.unit) out.unit = item.unit;
   if (item.label) out.label = item.label;
+  if (item.alt) out.alt = item.alt;
+  if (item.caption) out.caption = item.caption;
+  if (item.step !== undefined) out.step = item.step;
 
   // 案例：客户名与量化结果可以从知识条目里补（后台手填优先）
   if (!out.client) {
@@ -116,6 +119,9 @@ function materializeManualItem(item: ModuleItem): MaterializedItem {
   if (item.value) out.value = item.value;
   if (item.unit) out.unit = item.unit;
   if (item.label) out.label = item.label;
+  if (item.alt) out.alt = item.alt;
+  if (item.caption) out.caption = item.caption;
+  if (item.step !== undefined) out.step = item.step;
 
   out.readingMinutes = readingMinutes(body);
   return out;
@@ -135,16 +141,49 @@ export function materializeItem(
   return materializeManualItem(item);
 }
 
+/**
+ * 定时发布是否已生效。
+ *
+ * 未到时间 = 还没发布（等同草稿）。
+ * 用构建时刻判断 —— 所以**不需要后台定时任务**，
+ * 每次发布/构建时算一次，站点到点自动切换。
+ */
+export function isPublishDue(publishAt: string | undefined, now: Date): boolean {
+  if (!publishAt) return true;
+  const t = Date.parse(publishAt);
+  if (Number.isNaN(t)) return true; // 时间串坏了 → 当作立即发布，不卡住发布
+  return t <= now.getTime();
+}
+
+/**
+ * 排序：置顶的在前，其余按 order 升序。
+ *
+ * 置顶优先于 order —— 运营把一条标成置顶，是要它排最前，
+ * 不该被 order 覆盖掉。
+ */
+export function compareForDisplay<T extends { order: number; sticky?: boolean }>(
+  a: T,
+  b: T,
+): number {
+  const sa = a.sticky ? 0 : 1;
+  const sb = b.sticky ? 0 : 1;
+  if (sa !== sb) return sa - sb;
+  return a.order - b.order;
+}
+
 /** 物化一个模块 */
 export function materializeModule(
   module: PageModule,
   items: Map<string, KnowledgeItem>,
+  now: Date = new Date(),
 ): MaterializedModule {
-  const sorted = [...(module.items ?? [])].sort((a, b) => a.order - b.order);
+  const sorted = [...(module.items ?? [])].sort(compareForDisplay);
   const materialized: MaterializedItem[] = [];
 
   for (const item of sorted) {
     if (!item.published) continue;
+    // 定时发布未到 → 当作还没发布
+    if (!isPublishDue(item.publishAt, now)) continue;
     const m = materializeItem(item, items);
     if (m) materialized.push(m);
   }
@@ -163,13 +202,16 @@ export function materializeModule(
 export function materializePage(
   page: PageDef,
   items: Map<string, KnowledgeItem>,
+  now: Date = new Date(),
 ): MaterializedPage {
-  const sorted = [...(page.modules ?? [])].sort((a, b) => a.order - b.order);
+  const sorted = [...(page.modules ?? [])].sort(compareForDisplay);
   const modules: MaterializedModule[] = [];
 
   for (const module of sorted) {
     if (!module.enabled) continue;
-    modules.push(materializeModule(module, items));
+    // 模块自身的定时发布
+    if (!isPublishDue(module.publishAt, now)) continue;
+    modules.push(materializeModule(module, items, now));
   }
 
   return {

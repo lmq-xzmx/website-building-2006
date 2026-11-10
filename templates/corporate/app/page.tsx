@@ -63,7 +63,12 @@ export default function HomePage() {
             <div className="hero-visual">
               {/* 客户站的图片走自己的 CDN；这里用普通 img 而非 next/image，
                   因为静态导出下 next/image 需自定义 loader */}
-              <img src={home.images[0]} alt="" width={640} height={480} />
+              <img
+                src={home.images[0]}
+                alt={`${site.name} 的产品与解决方案示意`}
+                width={640}
+                height={480}
+              />
             </div>
           )}
         </div>

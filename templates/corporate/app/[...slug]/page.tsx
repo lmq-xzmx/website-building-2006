@@ -53,9 +53,17 @@ export default async function ModulePage({
   const page = (site.pages ?? []).find((p) => p.path === path);
   if (!page) notFound();
 
+  // 一页只能有一个 H1。
+  //
+  // 英雄区模块本身就渲染 H1（它是页面的主标题）——
+  // 这时再渲染一遍页面标题就成两个 H1 了，AI 摘标题会犯迷糊。
+  const hasHero = (page.modules ?? []).some(
+    (m) => m.type === "hero" && (m.items?.length ?? 0) > 0,
+  );
+
   return (
     <>
-      {page.description && (
+      {!hasHero && page.description && (
         <section className="section-tight">
           <div className="container">
             <h1>{page.title}</h1>

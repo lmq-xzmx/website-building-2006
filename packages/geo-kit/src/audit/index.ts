@@ -17,6 +17,9 @@ export { evaluateCrawlerAllowed, isAgentGroupDisallowed, parseRobotsGroups } fro
 
 export * from "./scorer.js";
 
+// UX 体检 —— 「人能否转化」那一维，与 GEO 体检互补
+export * from "./ux.js";
+
 /** 根因 —— 与本地 geo-knowledge 的 RootCause 概念一致 */
 export type RootCause =
   | "robots_blocking_ai"

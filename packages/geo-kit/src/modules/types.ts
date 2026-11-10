@@ -47,7 +47,15 @@ export type ModuleType =
   /** 行动号召条 */
   | "cta"
   /** 图片网格 */
-  | "gallery";
+  | "gallery"
+  /** 信任背书（资质认证 / 合作客户 / 数据证明） */
+  | "trust"
+  /** 客户 logo 墙 */
+  | "logo-wall"
+  /** 流程步骤 */
+  | "process"
+  /** 零摩擦表单（字段定义在模块 props 里） */
+  | "form";
 
 export const MODULE_TYPES: ModuleType[] = [
   "rich-text",
@@ -57,6 +65,10 @@ export const MODULE_TYPES: ModuleType[] = [
   "hero",
   "cta",
   "gallery",
+  "trust",
+  "logo-wall",
+  "process",
+  "form",
 ];
 
 /** 条目 —— 模块内的内容单位 */
@@ -81,6 +93,19 @@ export interface ModuleItem {
   order: number;
   /** 是否发布。false = 草稿，不进站点 */
   published: boolean;
+  /**
+   * 定时发布 —— ISO 时间串。
+   *
+   * 未到时间 = 还没发布（等同草稿）；到点自动生效。
+   * 物化时按当前时间判断，所以**不需要后台定时任务** ——
+   * 每次构建/发布时算一次，站点就自动切换了。
+   */
+  publishAt?: string;
+  /**
+   * 置顶 —— 同类条目里排最前。
+   * 用于「最新公告」「推荐案例」这类运营位。
+   */
+  sticky?: boolean;
   /** 附加字段 —— 按模块类型解释 */
   /** card-grid + products：规格表 */
   specs?: Array<{ name: string; value: string; unit?: string }>;
@@ -100,6 +125,34 @@ export interface ModuleItem {
   label?: string;
   /** cta：跳转链接 */
   href?: string;
+  /** trust / logo-wall：图片替代文本 —— 无障碍与 AI 识图都靠它 */
+  alt?: string;
+  /** trust：图注 —— 资质/数据/合作方的补充说明 */
+  caption?: string;
+  /** process：步骤序号 */
+  step?: number;
+}
+
+/**
+ * form 模块的字段定义。
+ *
+ * 为什么放在模块 props 而不是条目里：
+ *   表单是**一个**整体 —— 字段列表、必填规则、提交动作都属于表单本身，
+ *   条目只负责说明「提交之后会发生什么」。
+ */
+export interface FormFieldDef {
+  /** 字段名（提交时的 key） */
+  name: string;
+  /** 字段标签 */
+  label: string;
+  /** 输入类型 */
+  type?: "text" | "tel" | "email" | "url" | "textarea" | "select";
+  /** 是否必填 —— 必填项总数必须控制在 3–5 个 */
+  required?: boolean;
+  /** select 的可选项 */
+  options?: string[];
+  /** 占位提示 */
+  placeholder?: string;
 }
 
 /** 模块 —— 页面上的一个区块 */
@@ -120,6 +173,10 @@ export interface PageModule {
   order: number;
   /** 是否启用。false = 整块下线 */
   enabled: boolean;
+  /** 定时发布 —— ISO 时间串，未到不生效 */
+  publishAt?: string;
+  /** 置顶 —— 同页面里排最前 */
+  sticky?: boolean;
 }
 
 /** 页面 —— 一组模块 */
@@ -138,6 +195,26 @@ export interface PageDef {
   order: number;
   /** 是否发布 */
   published: boolean;
+  /**
+   * 父页面 id —— 构成**栏目树**。
+   *
+   * 企业门户的典型结构：
+   *   产品服务（父）
+   *     ├ 数据集成网关
+   *     ├ 数据工坊
+   *     └ 规则引擎
+   * 导航可以按树生成，子页面也能在父页里做「相关链接」。
+   *
+   * 空 = 顶级栏目。指向不存在的页面 = 视作顶级（不报错，
+   * 免得删了父页面就整棵子树崩掉）。
+   */
+  parentId?: string;
+  /** 导航里是否显示（默认跟随 published） */
+  inNav?: boolean;
+  /** 定时发布 —— ISO 时间串，未到不生效 */
+  publishAt?: string;
+  /** 置顶 —— 导航里排最前 */
+  sticky?: boolean;
 }
 
 /** 模块编排 —— 一个站点一份 */
