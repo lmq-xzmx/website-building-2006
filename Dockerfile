@@ -73,10 +73,18 @@ COPY --from=builder /app/packages/geo-kit/dist packages/geo-kit/dist
 COPY --from=builder /app/apps/admin/package.json apps/admin/
 
 # geo-kit 的运行期依赖（pg / cheerio）装在根，admin 与 geo-kit 都能解析
+# ⚠️ npm pkg set 需要已存在的 package.json —— 这里直接写一个最小清单
 RUN cd /srv/app \
- && npm pkg set name=website-building-runtime private=true \
- && npm pkg set dependencies.pg="^8.23.1" \
- && npm pkg set dependencies.cheerio="^1.0.0" \
+ && printf '%s\n' \
+      '{' \
+      '  "name": "website-building-runtime",' \
+      '  "private": true,' \
+      '  "version": "0.1.0",' \
+      '  "dependencies": {' \
+      '    "pg": "^8.23.1",' \
+      '    "cheerio": "^1.0.0"' \
+      '  }' \
+      '}' > package.json \
  && npm install --omit=dev --no-audit --no-fund
 
 # admin 依赖 geo-kit —— file: 走软链，指向 /srv/app/packages/geo-kit
