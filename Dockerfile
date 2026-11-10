@@ -59,11 +59,27 @@ WORKDIR /srv/app
 # ── 后台依赖 ────────────────────────────────────────────
 # 不能直接 COPY builder 的 node_modules —— pnpm 用符号链接指向
 # 根目录的 .pnpm store，COPY 过去全是断链。
-# 所以 runtime 阶段用 npm 独立装一份（只有两个依赖：pg + geo-kit）。
+# 所以 runtime 阶段用 npm 独立装一份。
+#
+# ⚠️ 依赖必须装在 **/srv/app 根**，不是 apps/admin 下：
+#   geo-kit 的 dist/sync/source.js 里 `await import("pg")`，
+#   Node 从**该文件所在位置**逐级向上找 node_modules ——
+#   /srv/app/packages/geo-kit/dist/sync/ → .../packages/geo-kit/node_modules
+#   → /srv/app/packages/node_modules → /srv/app/node_modules ✓
+#   装在 apps/admin/node_modules 的话，geo-kit 那边解析不到（实测报
+#   "Cannot find package 'pg'"）。
 COPY --from=builder /app/packages/geo-kit/package.json packages/geo-kit/
 COPY --from=builder /app/packages/geo-kit/dist packages/geo-kit/dist
 COPY --from=builder /app/apps/admin/package.json apps/admin/
 
+# geo-kit 的运行期依赖（pg / cheerio）装在根，admin 与 geo-kit 都能解析
+RUN cd /srv/app \
+ && npm pkg set name=website-building-runtime private=true \
+ && npm pkg set dependencies.pg="^8.23.1" \
+ && npm pkg set dependencies.cheerio="^1.0.0" \
+ && npm install --omit=dev --no-audit --no-fund
+
+# admin 依赖 geo-kit —— file: 走软链，指向 /srv/app/packages/geo-kit
 RUN cd /srv/app/apps/admin \
  && npm pkg set dependencies.@geokit/geo-kit="file:../../packages/geo-kit" \
  && npm install --omit=dev --no-audit --no-fund
