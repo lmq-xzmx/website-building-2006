@@ -353,6 +353,7 @@
       "@type": "Product",
       "name": "数据集成网关",
       "description": "数据集成网关部署在企业网络边界，连接 ERP、CRM、数据库与 SaaS 等异构系统，支持实时与批量两种采集模式，提供数据质量校验与断点续传能力。",
+      "image": "https://www.yunshu-tech.com/assets/data-gateway.svg",
       "category": "数据集成",
       "additionalProperty": [
         {
@@ -396,6 +397,7 @@
       "@type": "Product",
       "name": "数据工坊",
       "description": "数据工坊提供拖拽式数据建模与任务编排能力，支持 SQL 作业、可视化流处理与机器学习算子，内置版本管理与灰度发布。",
+      "image": "https://www.yunshu-tech.com/assets/data-studio.svg",
       "category": "数据建模",
       "additionalProperty": [
         {
@@ -439,6 +441,7 @@
       "@type": "Product",
       "name": "规则引擎",
       "description": "规则引擎用于实时决策场景，支持复杂事件流匹配、规则版本管理与灰度分流，规则变更无需重启服务。",
+      "image": "https://www.yunshu-tech.com/assets/rule-engine.svg",
       "category": "实时决策",
       "additionalProperty": [
         {
@@ -482,6 +485,7 @@
       "@type": "Product",
       "name": "审计中枢",
       "description": "审计中枢集中采集平台内所有操作留痕，提供操作回溯、异常行为告警与合规报表输出，日志采用加密存储并支持私有化部署。",
+      "image": "https://www.yunshu-tech.com/assets/audit-hub.svg",
       "category": "合规审计",
       "additionalProperty": [
         {

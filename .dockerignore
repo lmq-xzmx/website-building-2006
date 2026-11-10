@@ -1,0 +1,27 @@
+# 构建镜像时不需要的东西 —— 少 COPY 一点，镜像小一点、构建快一点
+
+.git/
+.github/
+.woodpecker/
+.gstack/
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+**/out/
+**/.build/
+**/dist/
+**/*.tsbuildinfo
+
+# 参考仓库 —— 只用于方法论查阅，不进产品镜像
+reference/
+
+# 文档不进运行时镜像
+docs/
+
+# 本地产物与密钥
+*.log
+logs/
+.env
+.env.local
+.DS_Store

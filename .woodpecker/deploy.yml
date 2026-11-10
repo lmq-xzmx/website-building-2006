@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────────────────────────
+# website-building 发布 —— 部署到生产机
+#
+# 触发：打 tag（git tag v1.0.0 && git push gitea v1.0.0）
+# 日常 push main 只跑 build.yml（只构建、不部署）。
+# 发布复用 NAS 已构建的镜像：把 sha tag 重打 latest 后在生产 pull && up -d。
+#
+# 编排文件与 secrets 属于目标机部署资产，一次性放好，
+# CI 不往目标机搬文件（与 geo-platform 同一约定）。
+#
+# ⚠️ Woodpecker 3.19：多文件 workflow 顶层不允许 name:
+# ⚠️ 文件里**不含内网地址** —— DEPLOY_HOST / REG / KEY 由环境变量注入。
+# ─────────────────────────────────────────────────────────────
+when:
+  - event: tag
+labels:
+  platform: nas
+  builder: ecs
+steps:
+  release:
+    image: docker:cli
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+      REG: ${REG}
+    commands:
+      - sh scripts/ci-release.sh
+
+  deploy:
+    image: alpine:3.20
+    environment:
+      # 部署私钥由 agent 挂载（与 geo-platform 的 KEY 同款约定）
+      KEY: ${KEY}
+      DEPLOY_HOST: ${DEPLOY_HOST}
+      DEPLOY_DIR: ${DEPLOY_DIR}
+    commands:
+      - apk add --no-cache openssh-client
+      - sh scripts/ci-deploy.sh
+
+  healthcheck:
+    image: alpine:3.20
+    commands:
+      - apk add --no-cache curl
+      - sleep 10
+      - curl -fsS --max-time 10 http://${DEPLOY_HOST}:${WB_SITE_PORT:-3019}/
+      - curl -fsS --max-time 10 http://${DEPLOY_HOST}:${WB_ADMIN_PORT:-3020}/healthz

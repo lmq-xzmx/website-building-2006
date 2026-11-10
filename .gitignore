@@ -22,3 +22,7 @@ logs/
 # 客户站构建中间目录与产物
 sites/*/.build/
 sites/*/out/
+
+# 内部部署分析（含内网地址与生产机信息）—— 仓库公开，这些不入库
+docs/06-*.md
+docs/_internal/

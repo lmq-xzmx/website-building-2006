@@ -1,0 +1,34 @@
+# 生产编排 —— 部署在目标机上（路径 /data/website-building/）
+#
+# 端口（已登记 3000 段 3019/3020）：
+#   3019 → 8080  静态站（demo-saas 客户站）—— 对外
+#   3020 → 5105  内容后台 —— **仅绑 127.0.0.1**
+#
+# ⚠️ 后台目前**没有鉴权**（内部工具）。宿主端口只绑回环 ——
+#    要从别处访问得先 SSH 隧道，或先接 Casdoor OIDC 再放开。
+#
+# ⚠️ 编排文件里**不含任何内网地址** —— registry 地址、密钥、部署机 IP
+#    全部来自目标机的 .env（由 bootstrap 脚本生成，600 权限，不进仓库）。
+#    仓库可以公开，敏感值留在目标机。
+services:
+  website-building:
+    image: ${WB_REGISTRY:-registry.internal:5000}/website-building:${WB_IMAGE_TAG:-latest}
+    container_name: wb-app
+    restart: unless-stopped
+    ports:
+      - "${WB_SITE_PORT:-3019}:8080"           # 静态站（对外）
+      - "127.0.0.1:${WB_ADMIN_PORT:-3020}:5105" # 内容后台（仅本机，无鉴权）
+    env_file:
+      - ${WB_SECRETS_FILE:-/data/secrets/wb.env}
+    environment:
+      ADMIN_HOST: 0.0.0.0
+      ADMIN_PORT: "5105"
+      SITES_DIR: /srv/app/sites
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:5105/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

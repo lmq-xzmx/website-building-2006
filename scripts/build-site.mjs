@@ -18,7 +18,7 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -34,6 +34,63 @@ async function run(cmd, args, cwd) {
       code === 0 ? res() : rej(new Error(`${cmd} ${args.join(" ")} 退出码 ${code}`)),
     );
   });
+}
+
+/**
+ * 合并计划内容 —— 在**构建目录**里做，源站不动。
+ *
+ * 做法：
+ *   site.ts          → 改名 site.base.ts（手写内容，原封不动）
+ *   site.ts          → 新生成，import base + planContent 后合并
+ *
+ * 为什么用改名而不是改写 site.ts 的内容：
+ *   改写要解析 TS 再序列化，容易丢注释、丢格式；
+ *   改名是文件级操作，零解析风险，手写内容的字节完全保留。
+ */
+async function mergePlanContent(contentDir) {
+  const planPath = join(contentDir, "plan.generated.ts");
+  const sitePath = join(contentDir, "site.ts");
+  const basePath = join(contentDir, "site.base.ts");
+
+  if (!existsSync(planPath)) return; // 没有计划内容 → 什么都不做
+
+  // 已经有 site.base.ts 说明合并过一次 —— 先还原，避免叠加叠加
+  if (existsSync(basePath)) {
+    await cp(basePath, sitePath);
+    await rm(basePath, { force: true });
+  } else {
+    await cp(sitePath, basePath);
+  }
+
+  const merged = `/**
+ * 合并后的内容包 —— **构建时自动生成**。
+ *
+ * = site.base.ts（手写内容）+ plan.generated.ts（后台编排的知识库内容）
+ *
+ * 手写内容永远完整保留 —— 机器内容只做叠加。
+ *
+ * import 不带扩展名：这个文件只给 Next.js（webpack）读，
+ * webpack 与 TypeScript 的 bundler 解析都能补全 .ts。
+ * （Node 原生 ESM 不做扩展名补全 —— 所以构建脚本在内存里合并，
+ *   不加载这个文件。）
+ */
+
+import type { SiteContent } from "@geokit/geo-kit";
+import { mergePlanContent } from "@geokit/geo-kit";
+
+import * as baseMod from "./site.base";
+import { planContent } from "./plan.generated";
+
+// 客户的内容包可能导出 site、default 或两者 —— 都兼容
+const base = (baseMod.site ?? baseMod.default) as SiteContent;
+
+export const site: SiteContent = mergePlanContent(base, planContent);
+
+export default site;
+`;
+
+  await writeFile(sitePath, merged, "utf8");
+  console.log("▸ 已合并计划内容（手写内容未改动）");
 }
 
 async function main() {
@@ -70,6 +127,16 @@ async function main() {
   // 3. 复制客户的内容包 —— 覆盖骨架的默认内容
   await cp(join(sitePath, "content"), join(buildDir, "content"), { recursive: true });
 
+  // 3.5 合并计划内容（后台编排的知识库内容）
+  //
+  // 分层的关键一步：**手写内容不被改动**。
+  //   content/site.ts          —— 手写（人维护），构建时改名为 site.base.ts
+  //   content/plan.generated.ts —— 机器生成（后台发布），直接叠加
+  // 合并后的 site.ts 是构建目录里的**临时文件**，源站一个字节都不动。
+  //
+  // 没有 plan.generated.ts → 不做合并，手写内容原样构建。
+  await mergePlanContent(join(buildDir, "content"));
+
   // 4. 复制客户已生成的 GEO 产物（robots/llms/sitemap/jsonld/index）
   const publicSrc = join(sitePath, "public");
   if (existsSync(publicSrc)) {
@@ -87,7 +154,11 @@ async function main() {
     await readFile(join(skeletonPath, "package.json"), "utf8"),
   );
 
-  const geoKitLocal = `file:${join(skeletonPath, "..", "geo-kit")}`;
+  // geo-kit 在 packages/geo-kit —— 不是 templates/ 下。
+  // 路径算错时 npm 会建一个指向不存在目录的符号链接：
+  // 构建还能过（Node 逐级向上找到工作区根的链接），但构建目录里
+  // 自己的 node_modules 是坏的 —— 直接调用它的 cli.js 就会 MODULE_NOT_FOUND。
+  const geoKitLocal = `file:${resolve(repoRoot, "packages/geo-kit")}`;
 
   const buildPkg = {
     name: `${sitePkg.name}-build`,
@@ -116,6 +187,18 @@ async function main() {
   console.log("▸ 安装构建依赖…");
   await run("npm", ["install", "--no-audit", "--no-fund"], buildDir);
 
+  // 5.8 从**合并后**的内容重新生成 GEO 产物
+  //
+  // 为什么必须重生成：public/ 里是上次手工 geo:generate 的产物，
+  // 它反映的是**手写内容**。后台编排了知识库内容后，站点内容变了，
+  // 但 llms.txt / JSON-LD / sitemap 还是旧的 —— AI 看到的和访客看到的不一致。
+  //
+  // 直接调 geo-kit 的 API，不在构建目录里跑 CLI ——
+  // 构建目录的 node_modules 是独立安装的，模块解析容易出问题
+  // （geo-kit 的 CLI 又用 Node 原生 ESM 加载 .ts 内容包，扩展名规则更严）。
+  console.log("▸ 生成 GEO 产物（基于合并后的内容）…");
+  await generateGeoArtifacts(buildDir);
+
   // 6. 构建
   //
   // 用 webpack 而非 turbopack：构建目录在 workspace 之外，
@@ -130,6 +213,67 @@ async function main() {
   await cp(join(buildDir, "out"), outDir, { recursive: true });
 
   console.log(`\n✓ 构建完成 → ${outDir}`);
+}
+
+/**
+ * 从构建目录里的内容生成 GEO 产物。
+ *
+ * **不加载合并后的 site.ts** —— 合并文件里的 import 用 .js 后缀
+ * （给 Next.js 的 tsc 用），Node 原生 ESM 解析不了那个后缀。
+ *
+ * 改为在内存里合并：直接 import 两个 .ts 源文件
+ * （Node 24 内置类型剥离，能直接跑 .ts；它们的 import 都是 type-only，
+ *  运行时不需要解析），再用 geo-kit 的 mergePlanContent 合并。
+ * 结果与 Next.js 构建时合并的完全一致 —— 同一个函数。
+ */
+async function generateGeoArtifacts(buildDir) {
+  const geoKitDist = resolve(repoRoot, "packages/geo-kit/dist");
+  const { generateArtifacts, artifactsToFiles, mergePlanContent } = await import(
+    pathToFileURL(join(geoKitDist, "index.js")).href
+  );
+
+  const contentDir = join(buildDir, "content");
+  const basePath = join(contentDir, "site.base.ts");
+  const planPath = join(contentDir, "plan.generated.ts");
+  const sourcePath = existsSync(basePath) ? basePath : join(contentDir, "site.ts");
+
+  const baseMod = await import(pathToFileURL(sourcePath).href);
+  const base = baseMod.site ?? baseMod.default;
+  if (!base) throw new Error("内容包未导出 site");
+
+  let content = base;
+  if (existsSync(planPath)) {
+    const planMod = await import(pathToFileURL(planPath).href);
+    content = mergePlanContent(base, planMod.planContent ?? planMod.default);
+  }
+
+  const artifacts = generateArtifacts(content, { includeLlmsFull: true });
+  const files = artifactsToFiles(artifacts, content, { includeLlmsFull: true });
+
+  const publicDir = join(buildDir, "public");
+  await mkdir(publicDir, { recursive: true });
+  for (const [name, body] of Object.entries(files)) {
+    const target = join(publicDir, name);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, body, "utf8");
+  }
+
+  // JSON-LD 与内容索引单独落文件 —— 模板从它 import
+  await mkdir(join(publicDir, "_geo"), { recursive: true });
+  await writeFile(
+    join(publicDir, "_geo/jsonld.json"),
+    JSON.stringify(artifacts.jsonLd, null, 2),
+    "utf8",
+  );
+  await writeFile(
+    join(publicDir, "_geo/index.json"),
+    JSON.stringify(artifacts.index, null, 2),
+    "utf8",
+  );
+
+  console.log(
+    `  ${artifacts.jsonLd.length} 段 JSON-LD，${artifacts.index.entries.length} 条索引`,
+  );
 }
 
 main().catch((err) => {

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { site } from "@/content/site";
+import { generateThemeCss, themeHtmlAttrs } from "@geokit/geo-kit";
 import { JsonLdScripts } from "./geo";
 import "./globals.css";
 
@@ -43,11 +44,19 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const nav = site.navigation ?? [];
+  const themeAttrs = themeHtmlAttrs(site.theme);
+  const themeCss = generateThemeCss(site.theme);
 
   return (
-    <html lang={site.language ?? site.locale}>
+    <html lang={site.language ?? site.locale} {...themeAttrs}>
       <head>
         <JsonLdScripts />
+        {themeCss && (
+          <style
+            id="geo-theme"
+            dangerouslySetInnerHTML={{ __html: themeCss }}
+          />
+        )}
       </head>
       <body>
         <header className="site-header">

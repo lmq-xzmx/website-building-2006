@@ -1,0 +1,224 @@
+/* ==========================================================================
+   设计令牌 —— 骨架的设计系统
+   --------------------------------------------------------------------------
+   为什么要这一层：
+   骨架要极简（行业包只换内容与少量变量），但「千行万业」意味着客户站
+   不能长得千篇一律。设计令牌把**所有可变的视觉决策**收敛到一组变量，
+   行业包 / 客户配置只需覆盖变量即可换一套视觉，不必碰组件。
+
+   换肤方式：
+     :root { --color-primary-500: ...; }        ← 全局主题
+     [data-theme="forest"] { ... }              ← 主题变体
+     或在内容包中指定 brandColor，由构建时注入
+   ========================================================================== */
+
+:root {
+  /* ── 色板：主色（蓝） ─────────────────────────────────
+     完整色阶而非单个色值 —— 组件需要 hover/active/subtle 等层次 */
+  --primary-50: #eef4ff;
+  --primary-100: #d9e6ff;
+  --primary-200: #bcd3ff;
+  --primary-300: #8eb6ff;
+  --primary-400: #598eff;
+  --primary-500: #2f6bff;
+  --primary-600: #1a4ff0;
+  --primary-700: #133dd6;
+  --primary-800: #1634ac;
+  --primary-900: #183189;
+  --primary-950: #111f57;
+
+  /* 中性色：带冷调，与主色协调 */
+  --neutral-0: #ffffff;
+  --neutral-50: #f8fafc;
+  --neutral-100: #f1f5f9;
+  --neutral-200: #e2e8f0;
+  --neutral-300: #cbd5e1;
+  --neutral-400: #94a3b8;
+  --neutral-500: #64748b;
+  --neutral-600: #475569;
+  --neutral-700: #334155;
+  --neutral-800: #1e293b;
+  --neutral-900: #0f172a;
+  --neutral-950: #020617;
+
+  /* 语义色 */
+  --success-50: #ecfdf5;
+  --success-500: #10b981;
+  --success-700: #047857;
+  --warning-50: #fffbeb;
+  --warning-500: #f59e0b;
+  --warning-700: #b45309;
+  --danger-50: #fef2f2;
+  --danger-500: #ef4444;
+  --danger-700: #b91c1c;
+
+  /* ── 语义别名（组件只认这些） ──────────────────────── */
+  --color-primary: var(--primary-500);
+  --color-primary-hover: var(--primary-600);
+  --color-primary-active: var(--primary-700);
+  --color-primary-subtle: var(--primary-50);
+  --color-primary-subtle-hover: var(--primary-100);
+  --color-on-primary: #ffffff;
+
+  --color-bg: var(--neutral-0);
+  --color-bg-subtle: var(--neutral-50);
+  --color-bg-muted: var(--neutral-100);
+  --color-surface: var(--neutral-0);
+  --color-surface-raised: var(--neutral-0);
+
+  --color-text: var(--neutral-900);
+  --color-text-secondary: var(--neutral-600);
+  --color-text-muted: var(--neutral-500);
+  --color-text-inverse: var(--neutral-0);
+  --color-text-primary: var(--primary-600);
+
+  --color-border: var(--neutral-200);
+  --color-border-strong: var(--neutral-300);
+  --color-focus: var(--primary-400);
+
+  /* ── 排版 ───────────────────────────────────────────
+     流体字号：clamp(min, 首选值, max) —— 不用 media query 做断点字号 */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Source Han Sans SC", "Noto Sans CJK SC", "Helvetica Neue", Arial,
+    sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: clamp(1.375rem, 1.2rem + 0.8vw, 1.625rem);
+  --text-3xl: clamp(1.625rem, 1.3rem + 1.6vw, 2.125rem);
+  --text-4xl: clamp(2rem, 1.4rem + 2.8vw, 2.875rem);
+  --text-5xl: clamp(2.375rem, 1.5rem + 4vw, 3.75rem);
+
+  --leading-tight: 1.2;
+  --leading-snug: 1.4;
+  --leading-normal: 1.7;
+  --leading-relaxed: 1.85;
+
+  --tracking-tight: -0.022em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+
+  /* ── 间距（8 基准 + 半档） ─────────────────────────── */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  --section-padding: clamp(3.5rem, 2.5rem + 4vw, 6.5rem);
+  --container-max: 1180px;
+  --container-pad: clamp(1.25rem, 0.9rem + 1.6vw, 2.5rem);
+  --prose-max: 72ch;
+
+  /* ── 圆角 ────────────────────────────────────────── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+
+  /* ── 阴影 ────────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-sm: 0 1px 3px rgb(15 23 42 / 0.08), 0 1px 2px rgb(15 23 42 / 0.04);
+  --shadow-md: 0 4px 12px rgb(15 23 42 / 0.08), 0 2px 4px rgb(15 23 42 / 0.04);
+  --shadow-lg: 0 12px 32px rgb(15 23 42 / 0.1), 0 4px 8px rgb(15 23 42 / 0.04);
+  --shadow-xl: 0 24px 56px rgb(15 23 42 / 0.14), 0 8px 16px rgb(15 23 42 / 0.05);
+
+  /* ── 动效 ────────────────────────────────────────── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 220ms;
+  --duration-slow: 400ms;
+
+  --header-height: 68px;
+}
+
+/* ── 主题变体：森林绿（适合环保/农业/医疗） ─────────────── */
+[data-theme="forest"] {
+  --primary-50: #ecfdf5;
+  --primary-100: #d1fae5;
+  --primary-200: #a7f3d0;
+  --primary-300: #6ee7b7;
+  --primary-400: #34d399;
+  --primary-500: #10b981;
+  --primary-600: #059669;
+  --primary-700: #047857;
+  --primary-800: #065f46;
+  --primary-900: #064e3b;
+  --primary-950: #022c22;
+}
+
+/* ── 主题变体：石墨（适合金融/咨询/律所） ───────────────── */
+[data-theme="slate"] {
+  --primary-50: #f8fafc;
+  --primary-100: #f1f5f9;
+  --primary-200: #e2e8f0;
+  --primary-300: #cbd5e1;
+  --primary-400: #94a3b8;
+  --primary-500: #64748b;
+  --primary-600: #475569;
+  --primary-700: #334155;
+  --primary-800: #1e293b;
+  --primary-900: #0f172a;
+  --primary-950: #020617;
+  --color-text-primary: var(--primary-800);
+}
+
+/* ── 主题变体：暖橙（适合餐饮/零售/消费） ───────────────── */
+[data-theme="amber"] {
+  --primary-50: #fffbeb;
+  --primary-100: #fef3c7;
+  --primary-200: #fde68a;
+  --primary-300: #fcd34d;
+  --primary-400: #fbbf24;
+  --primary-500: #f59e0b;
+  --primary-600: #d97706;
+  --primary-700: #b45309;
+  --primary-800: #92400e;
+  --primary-900: #78350f;
+  --primary-950: #451a03;
+}
+
+/* ── 深色模式 ───────────────────────────────────────
+   客户站可能部署在深色品牌站；用 prefers-color-scheme 自动跟随 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: var(--neutral-950);
+    --color-bg-subtle: var(--neutral-900);
+    --color-bg-muted: var(--neutral-800);
+    --color-surface: var(--neutral-900);
+    --color-surface-raised: var(--neutral-800);
+
+    --color-text: var(--neutral-100);
+    --color-text-secondary: var(--neutral-300);
+    --color-text-muted: var(--neutral-400);
+    --color-text-primary: var(--primary-300);
+    --color-on-primary: var(--neutral-950);
+
+    --color-border: var(--neutral-800);
+    --color-border-strong: var(--neutral-700);
+    --color-primary-subtle: color-mix(in srgb, var(--primary-500) 16%, transparent);
+    --color-primary-subtle-hover: color-mix(in srgb, var(--primary-500) 26%, transparent);
+
+    --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-md: 0 4px 12px rgb(0 0 0 / 0.45), 0 2px 4px rgb(0 0 0 / 0.3);
+    --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5), 0 4px 8px rgb(0 0 0 / 0.3);
+    --shadow-xl: 0 24px 56px rgb(0 0 0 / 0.6), 0 8px 16px rgb(0 0 0 / 0.4);
+  }
+}

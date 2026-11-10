@@ -20,6 +20,13 @@ export const site: SiteContent = {
   locale: "zh-CN",
   language: "zh-CN",
 
+  theme: {
+    // 工业物联网：沉稳的蓝 + modern 圆角风格
+    variant: "default",
+    style: "modern",
+    respectColorScheme: true,
+  },
+
   organization: {
     name: "示例科技有限公司",
     legalName: "示例科技股份有限公司",
@@ -94,10 +101,10 @@ export const site: SiteContent = {
         "所有产品均通过 CE 与 RoHS 认证，支持 7×24 小时运行，已在汽车零部件、锂电packpack与光伏组件三条产线上稳定运行超过 3 年。",
       ],
       bullets: [
-        "12 款工业采集设备，48000 数据点/日/台",
-        "支持 Modbus、OPC UA、Profinet 三大协议",
-        "故障响应时间从 4 小时降至 25 分钟",
-        "CE / RoHS 认证，已服务 320 家制造企业",
+        "320 家 制造企业已上线",
+        "48000 数据点/日/台",
+        "12 款 工业采集设备",
+        "3 类 工业协议",
       ],
       cta: {
         label: "获取选型报价",

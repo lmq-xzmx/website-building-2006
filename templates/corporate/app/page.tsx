@@ -32,40 +32,109 @@ export default function HomePage() {
     <>
       {/* ── 英雄区：H1 = 定位句 ── */}
       <section className="hero">
-        <div className="container">
-          <h1>{home.title}</h1>
-          {home.subtitle && <p className="lead">{home.subtitle}</p>}
+        <div className="container hero-split">
+          <div>
+            <h1>{home.title}</h1>
+            {home.subtitle && <p className="lead">{home.subtitle}</p>}
 
-          {home.bullets && home.bullets.length > 0 && (
-            <ul className="bullets">
-              {home.bullets.map((b) => (
-                <li key={b}>{b}</li>
-              ))}
-            </ul>
-          )}
+            {home.bullets && home.bullets.length > 0 && (
+              <ul className="bullets">
+                {home.bullets.map((b) => (
+                  <li key={b}>{b}</li>
+                ))}
+              </ul>
+            )}
 
-          {home.cta && (
-            <div className="cta-row">
-              <Link href={home.cta.href} className="btn btn-primary">
-                {home.cta.label}
-              </Link>
-              {home.cta.secondary && (
-                <Link href={home.cta.secondary.href} className="btn btn-outline">
-                  {home.cta.secondary.label}
+            {home.cta && (
+              <div className="cta-row">
+                <Link href={home.cta.href} className="btn btn-primary btn-lg">
+                  {home.cta.label}
                 </Link>
-              )}
+                {home.cta.secondary && (
+                  <Link href={home.cta.secondary.href} className="btn btn-outline btn-lg">
+                    {home.cta.secondary.label}
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+
+          {home.images && home.images.length > 0 && (
+            <div className="hero-visual">
+              {/* 客户站的图片走自己的 CDN；这里用普通 img 而非 next/image，
+                  因为静态导出下 next/image 需自定义 loader */}
+              <img src={home.images[0]} alt="" width={640} height={480} />
             </div>
           )}
         </div>
       </section>
 
-      {/* ── 定位正文：首段结论先行 ── */}
+      {/* ── 数据条：量化数字 ──
+          双重价值：转化上给人「有实力」的第一印象；
+          GEO 上是 AI 最爱引用的结构（Statistics Addition +33%）。
+
+          只在**真的是「数字 + 指标名」**时才拆成大字 + 小字。
+          「支持 Modbus、OPC UA、Profinet 三大协议」虽然以「支持」开头，
+          但没有数值，不该被当成数据条 —— 大字显示协议名很荒唐。
+
+          判据：整条 bullet 必须**以数值开头**（允许前置中文动词如「已服务」）。
+          否则整条作为标签显示，数值列为空。 */}
+      {home.bullets && home.bullets.length > 0 && (
+        <section className="section-tight">
+          <div className="container">
+            <div className="stat-strip">
+              {home.bullets.slice(0, 4).map((b) => {
+                // 数值 + 单位。单位只允许**单个**中文单位字或符号，
+                // 否则「12 款工业采集设备」会把「工业采」当单位截断。
+                const UNIT = "[%‰]|个|台|条|款|家|人|位|项|套|次|万|亿|年|月|日|天|小时|分钟|秒|元|美元|倍|米|平方米|吨|kg";
+                // 两种写法都支持：
+                //   句首式：「320 家 制造企业已上线」
+                //   句尾式：「单集群实测可用性 99.95%」
+                const m = b.match(
+                  new RegExp(`^(?:已|共|累计|超过|近|逾)?\\s*(\\d[\\d.,]*\\s*(?:${UNIT})?)\\s*[，,、]?\\s*(.*)$`),
+                );
+                const mTail = b.match(
+                  new RegExp(`^(.*?)\\s*(\\d[\\d.,]*\\s*(?:${UNIT})?)\\s*[。.]?$`),
+                );
+                let value = "";
+                let label = b;
+                if (m) {
+                  value = m[1].trim();
+                  label = m[2].trim() || b;
+                } else if (mTail) {
+                  value = mTail[2].trim();
+                  label = mTail[1].trim();
+                }
+                return (
+                  <div className="stat" key={b}>
+                    {value ? (
+                      <>
+                        <span className="stat-value">{value}</span>
+                        <span className="stat-label">{label}</span>
+                      </>
+                    ) : (
+                      <span className="stat-label">{label}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── 定位正文：首段结论先行 ──
+          注意：不要给同一个元素同时加 .container 与 .prose ——
+          两者都设 max-width，.prose 的 72ch 会覆盖容器宽度，
+          导致正文被挤成窄条。宽度约束取其一。 */}
       {home.body && home.body.length > 0 && (
         <section className="section">
-          <div className="container prose">
-            {home.body.map((p) => (
-              <p key={p.slice(0, 32)}>{p}</p>
-            ))}
+          <div className="container">
+            <div className="prose">
+              {home.body.map((p) => (
+                <p key={p.slice(0, 32)}>{p}</p>
+              ))}
+            </div>
           </div>
         </section>
       )}

@@ -1,0 +1,34 @@
+# ─────────────────────────────────────────────────────────────
+# website-building 常规构建 —— NAS 构建机
+#
+# 与 geo-platform / cn-math-taxonomy 同一套约定：
+#   labels 必须是 agent labels 的子集；NAS agent: platform=nas,builder=nas
+#   只构建不部署；tag = commit sha + latest
+#
+# ⚠️ Woodpecker 3.19：多文件 workflow 顶层不允许 name:
+#
+# ⚠️ 文件里**不含内网地址** —— registry 由 REG 环境变量注入
+#    （agent 或 CI secret 里配）。仓库可以公开。
+# ─────────────────────────────────────────────────────────────
+when:
+  - event: push
+    branch: main
+labels:
+  platform: nas
+  builder: nas
+steps:
+  check-platform:
+    image: alpine:3.20
+    commands:
+      - test "$(uname -m)" = "x86_64" || (echo "构建机不是 x86_64，中止" && exit 1)
+
+  build-and-push:
+    image: docker:cli
+    environment:
+      # 本 step 挂宿主 docker.sock（agent 的 WOODPECKER_BACKEND_DOCKER_VOLUMES），
+      # 不覆盖 DOCKER_HOST 会死在 "lookup docker no such host"
+      DOCKER_HOST: unix:///var/run/docker.sock
+      # REG 由 agent / CI secret 注入，不写在仓库里
+      REG: ${REG}
+    commands:
+      - sh scripts/ci-build.sh

@@ -20,6 +20,13 @@ export const site: SiteContent = {
   locale: "zh-CN",
   language: "zh-CN",
 
+  theme: {
+    // 企业软件：石板灰（金融/合规气质）+ classic 方正风格
+    variant: "slate",
+    style: "classic",
+    respectColorScheme: true,
+  },
+
   organization: {
     name: "云枢科技股份有限公司",
     legalName: "云枢科技股份有限公司",
@@ -81,16 +88,17 @@ export const site: SiteContent = {
         "单点登录 SSO 打通企业既有身份体系，审计日志保留 3 年可追溯记录，金融行业客户据此通过了全部内外部合规审计。",
       ],
       bullets: [
-        "180 家企业客户，覆盖 11 个行业",
-        "单集群实测可用性 99.95%",
-        "12 家信创产品兼容性认证",
-        "审计日志保留 3 年可追溯",
+        "180 家 企业客户",
+        "99.95% 单集群实测可用性",
+        "12 家 信创产品兼容性认证",
+        "3 年 审计日志可追溯",
       ],
       cta: {
         label: "申请试用",
         href: "/contact",
         secondary: { label: "查看产品矩阵", href: "/products" },
       },
+      images: ["/assets/hero.svg"],
     },
 
     {
@@ -216,6 +224,7 @@ export const site: SiteContent = {
   products: [
     {
       id: "data-gateway",
+      image: "/assets/data-gateway.svg",
       name: "数据集成网关",
       summary: "跨异构系统的数据采集与路由网关，单节点日均处理数据量 42 亿条，支持 1200+ 数据源连接器。",
       description:
@@ -238,6 +247,7 @@ export const site: SiteContent = {
     },
     {
       id: "data-studio",
+      image: "/assets/data-studio.svg",
       name: "数据工坊",
       summary: "可视化数据建模平台，支持拖拽式建模与 200+ 算子，单次作业处理 8TB 数据。",
       description:
@@ -260,6 +270,7 @@ export const site: SiteContent = {
     },
     {
       id: "rule-engine",
+      image: "/assets/rule-engine.svg",
       name: "规则引擎",
       summary: "实时决策规则引擎，单节点 QPS 达 12000，支持复杂事件流与灰度规则分流。",
       description:
@@ -282,6 +293,7 @@ export const site: SiteContent = {
     },
     {
       id: "audit-hub",
+      image: "/assets/audit-hub.svg",
       name: "审计中枢",
       summary: "统一操作留痕与合规审计平台，日志保留 3 年，支持 syslog 与 Kafka 对接。",
       description:

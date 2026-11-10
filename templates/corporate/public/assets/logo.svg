@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 36" fill="none">
+  <rect x="0" y="4" width="28" height="28" rx="8" fill="#2f6bff"/>
+  <path d="M8 20l5-6 4 4 5-7 4 5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="36" y="24" font-family="-apple-system, PingFang SC, sans-serif" font-size="16" font-weight="700" fill="#0f172a">示例科技</text>
+</svg>
