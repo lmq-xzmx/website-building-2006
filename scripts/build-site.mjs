@@ -15,11 +15,12 @@
  *   node scripts/build-site.mjs <site-dir> [--skeleton templates/corporate]
  */
 
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -34,6 +35,144 @@ async function run(cmd, args, cwd) {
       code === 0 ? res() : rej(new Error(`${cmd} ${args.join(" ")} 退出码 ${code}`)),
     );
   });
+}
+
+/**
+ * 构建目录的依赖 —— **复用工作区已装的依赖**，不再重下几百 MB。
+ *
+ * ── 原来的做法与它为什么慢 ─────────────────────────────
+ *   构建目录（sites/<site>/.build）被当成**独立的 npm 项目**，
+ *   在里面跑一次 `npm install` —— Next.js + React 全套从公网 registry
+ *   重新下载。生产机上这一步实测跑了 22 分钟还没装完：
+ *   宿主 npm 缓存基本是空的，每次发布都要重下一遍。
+ *
+ * ── 现在怎么做的 ─────────────────────────────────────
+ *   工作区（pnpm）里**已经装好了**骨架需要的全部依赖
+ *   （templates/corporate/node_modules：next / react / react-dom /
+ *    typescript / @types/* / @geokit/geo-kit）。
+ *   构建目录就在工作区里，所以直接把工作区的依赖**软链**过去即可：
+ *
+ *     .build/node_modules/next  →  templates/corporate/node_modules/next
+ *
+ *   Node 解析包时会对软链取 realpath，落到 pnpm 的 .pnpm store，
+ *   它的传递依赖（postcss / styled-jsx …）在 store 里都能解析到 ——
+ *   与 npm 平铺布局的效果一致。
+ *
+ *   版本一致性：pnpm-lock.yaml 钉的版本与 npm install 解析出的版本
+ *   相同（next 15.5.29 / react 19.3.1），构建产物不变。
+ *
+ * ── 兜底 ─────────────────────────────────────────────
+ *   工作区没装依赖时（例如只拷了构建目录），退回 npm install；
+ *   npm 路径下若依赖清单没变且 node_modules 还在，**跳过安装**。
+ *   可用 WB_NPM_REGISTRY 指定镜像源（默认走 npm 自己的配置）。
+ *
+ * 环境变量：
+ *   WB_BUILD_DEPS_MODE = auto（默认） | workspace | npm
+ *   WB_NPM_REGISTRY    = npm install 用的 registry（可选）
+ */
+const DEPS_MODE = process.env.WB_BUILD_DEPS_MODE ?? "auto";
+
+/** 依赖指纹文件 —— 记在构建目录里，判断能否跳过安装 */
+const DEPS_MARKER = ".deps-fingerprint";
+
+/** 计算依赖指纹：package.json 内容 + 模式 + 骨架路径 */
+function depsFingerprint(buildPkg, mode, skeletonPath) {
+  return createHash("sha256")
+    .update(JSON.stringify(buildPkg))
+    .update(" ")
+    .update(mode)
+    .update(" ")
+    .update(skeletonPath)
+    .digest("hex")
+    .slice(0, 16);
+}
+
+/**
+ * 把工作区里已装好的依赖软链到构建目录。
+ *
+ * @returns true=软链完成；false=工作区没装依赖（调用方退回 npm install）
+ */
+async function linkWorkspaceDeps(buildDir, skeletonPath) {
+  const src = join(skeletonPath, "node_modules");
+  if (!existsSync(src)) return false;
+
+  const entries = await readdir(src);
+  // .pnpm 是 pnpm 的私有目录（不能直接链），.modules.yaml 是元数据
+  const linkable = entries.filter((n) => n !== ".pnpm" && n !== ".modules.yaml");
+  if (!linkable.includes("next")) return false;
+
+  const dest = join(buildDir, "node_modules");
+  await rm(dest, { recursive: true, force: true });
+  await mkdir(dest, { recursive: true });
+
+  for (const name of linkable) {
+    const target = join(src, name);
+    const linkPath = join(dest, name);
+    // 相对软链 —— 目录整体搬走也不会断
+    await symlink(relative(dirname(linkPath), target), linkPath, "dir");
+  }
+  return true;
+}
+
+/**
+ * 准备构建目录的依赖。
+ *
+ * @returns "workspace"（复用工作区）| "cached"（跳过安装）| "npm"（新装）
+ */
+async function prepareBuildDeps(buildDir, buildPkg, skeletonPath) {
+  const fingerprint = depsFingerprint(buildPkg, DEPS_MODE, skeletonPath);
+  const markerPath = join(buildDir, DEPS_MARKER);
+  const prev = existsSync(markerPath)
+    ? (await readFile(markerPath, "utf8")).trim()
+    : "";
+
+  // 模式 1：复用工作区依赖（零网络）
+  if (DEPS_MODE !== "npm") {
+    const linked = await linkWorkspaceDeps(buildDir, skeletonPath);
+    if (linked) {
+      await writeFile(markerPath, fingerprint, "utf8");
+      console.log("▸ 依赖：复用工作区已装依赖（零下载）");
+      return "workspace";
+    }
+    if (DEPS_MODE === "workspace") {
+      console.error(
+        `✗ 工作区依赖不可用（${join(skeletonPath, "node_modules")} 不存在）`,
+      );
+      process.exit(1);
+    }
+  }
+
+  // 模式 2：npm —— 依赖没变且 node_modules 还在就跳过
+  if (prev === fingerprint && existsSync(join(buildDir, "node_modules"))) {
+    console.log("▸ 依赖：清单未变，复用已装 node_modules（跳过安装）");
+    return "cached";
+  }
+
+  console.log("▸ 安装构建依赖（npm install）…");
+  const npmArgs = ["install", "--no-audit", "--no-fund"];
+  if (process.env.WB_NPM_REGISTRY) {
+    npmArgs.push(`--registry=${process.env.WB_NPM_REGISTRY}`);
+  }
+  await run("npm", npmArgs, buildDir);
+  await writeFile(markerPath, fingerprint, "utf8");
+  return "npm";
+}
+
+/**
+ * 找到构建目录里的 next 可执行入口。
+ *
+ * 直接跑 node <next>/dist/bin/next，绕开 npx —— npx 在找不到时会去
+ * 网络上找包，缓存不命中就变成一次网络等待。
+ */
+async function findNextBin(buildDir) {
+  const candidates = [
+    join(buildDir, "node_modules", "next", "dist", "bin", "next"),
+    join(buildDir, "node_modules", "next", "dist", "bin", "next.js"),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return null;
 }
 
 /**
@@ -139,8 +278,16 @@ async function main() {
   console.log(`▸ 客户站：${sitePath}`);
 
   // 1. 清理并创建构建目录
-  await rm(buildDir, { recursive: true, force: true });
+  //
+  // **保留 node_modules 与 .next**：
+  //   node_modules —— 依赖装一次就好，不必每次重下（见 prepareBuildDeps）
+  //   .next        —— next build 的增量缓存，内容变了会自动失效
+  // 其余内容（骨架页面层、内容包、产物）每次重建，保证内容是最新的。
   await mkdir(buildDir, { recursive: true });
+  for (const item of await readdir(buildDir)) {
+    if (item === "node_modules" || item === ".next") continue;
+    await rm(join(buildDir, item), { recursive: true, force: true });
+  }
 
   // 2. 复制骨架（页面层）—— 骨架只有这一份
   for (const item of SKELETON_ITEMS) {
@@ -208,9 +355,10 @@ async function main() {
     "utf8",
   );
 
-  // 5.5 在构建目录安装依赖（构建目录是独立的 npm 项目）
-  console.log("▸ 安装构建依赖…");
-  await run("npm", ["install", "--no-audit", "--no-fund"], buildDir);
+  // 5.5 准备构建目录的依赖
+  //
+  // 优先复用工作区已装的依赖（零下载）；没有才退回 npm install。
+  await prepareBuildDeps(buildDir, buildPkg, skeletonPath);
 
   // 5.8 从**合并后**的内容重新生成 GEO 产物
   //
@@ -229,8 +377,16 @@ async function main() {
   // 用 webpack 而非 turbopack：构建目录在 workspace 之外，
   // turbopack 会因 "Filesystem root used for resolution" 报错。
   // 静态站构建速度不敏感，webpack 更稳。
+  //
+  // 直接跑 node <next>/dist/bin/next，绕开 npx ——
+  // npx 找不到本地包时会去网络上找，等于一次无谓的网络等待。
   console.log("▸ 构建中…");
-  await run("npx", ["next", "build"], buildDir);
+  const nextBin = await findNextBin(buildDir);
+  if (nextBin) {
+    await run(process.execPath, [nextBin, "build"], buildDir);
+  } else {
+    await run("npx", ["next", "build"], buildDir);
+  }
 
   // 7. 产物回写
   const outDir = join(sitePath, "out");
