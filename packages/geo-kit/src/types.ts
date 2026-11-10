@@ -42,6 +42,9 @@ export interface SiteContent {
   /** 默认语言标记 */
   language?: string;
 
+  /** 视觉主题 —— 骨架的设计令牌变体 */
+  theme?: SiteTheme;
+
   /** 组织主体信息 —— Organization / WebSite Schema 的来源 */
   organization: OrganizationContent;
 
@@ -90,6 +93,25 @@ export interface OrganizationContent {
   address?: PostalAddress;
   /** 联系方式 */
   contactPoint?: ContactPoint;
+}
+
+/**
+ * 视觉主题 —— 骨架的设计令牌变体。
+ *
+ * 「千行万业」意味着客户站不能长得千篇一律。主题只改**令牌**，
+ * 不改组件 —— 换主题的边际成本接近零。
+ */
+export interface SiteTheme {
+  /** 主题变体名：default / forest / slate / amber */
+  variant?: "default" | "forest" | "slate" | "amber";
+  /** 跟随系统深色模式（默认 true） */
+  respectColorScheme?: boolean;
+  /** 覆盖主色 —— 十六进制，如 "#7c3aed" */
+  primaryColor?: string;
+  /** 覆盖强调色 */
+  accentColor?: string;
+  /** 站点风格：modern（圆角、阴影）/ classic（方正、边框）/ minimal（大留白） */
+  style?: "modern" | "classic" | "minimal";
 }
 
 export interface PostalAddress {

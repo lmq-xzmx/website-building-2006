@@ -26,6 +26,7 @@ export type {
   SchemaType,
   Platform,
   SiteLocale,
+  SiteTheme,
   // 产物
   SiteArtifacts,
   JsonLdScript,
@@ -115,8 +116,13 @@ export {
   type CrawlOptions,
 } from "./audit/crawl.js";
 
-export { generateArtifacts } from "./artifacts.js";
+export { generateArtifacts, artifactsToFiles } from "./artifacts.js";
 export type { GenerateOptions } from "./artifacts.js";
+
+export {
+  generateThemeCss,
+  themeHtmlAttrs,
+} from "./theme.js";
 
 export {
   INDUSTRY_PACKS,
@@ -172,3 +178,54 @@ export {
   type JsonRpcResponse,
   type ToolCallResult,
 } from "./integrations/mcp.js";
+
+export {
+  syncKnowledgeBase,
+  applyKnowledgeArticles,
+  renderKnowledgeModule,
+  renderSyncReport,
+  structureContent,
+  deriveSummary,
+  toArticleId,
+  DEFAULT_MAPPING,
+  type KnowledgeItem,
+  type KnowledgeBase,
+  type SyncResult,
+  type ContentMapping,
+} from "./sync/knowledge-sync.js";
+
+export {
+  PostgresKnowledgeSource,
+  MemoryKnowledgeSource,
+  type KnowledgeSource,
+  type PostgresSourceOptions,
+  type PgLike,
+} from "./sync/source.js";
+
+export { runSync, writeKnowledgeModule, type SyncOptions, type SyncOutput } from "./sync/cli.js";
+
+export {
+  applyPlan,
+  validatePlan,
+  planStats,
+  emptyPlan,
+  PLAN_SLOTS,
+  type ContentPlan,
+  type PlanEntry,
+  type PlanSlot,
+  type ApplyPlanResult,
+} from "./plan/plan.js";
+
+export {
+  materializePlan,
+  renderPlanModule,
+  mergePlanContent,
+  type MaterializedPlan,
+} from "./plan/generate.js";
+
+export {
+  readPlan,
+  writePlan,
+  planPath,
+  PLAN_FILENAME,
+} from "./plan/store.js";

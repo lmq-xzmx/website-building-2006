@@ -1,0 +1,23 @@
+{
+  "name": "@geokit/admin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "内容后台 —— 从知识库挑选内容，编排进站点，构建发布",
+  "scripts": {
+    "dev": "node --watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@geokit/geo-kit": "workspace:*",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.23.1",
+    "typescript": "^5.7.2"
+  }
+}

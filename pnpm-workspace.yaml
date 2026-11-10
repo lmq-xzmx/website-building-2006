@@ -2,5 +2,6 @@ packages:
   - "packages/*"
   - "templates/*"
   - "sites/*"
+  - "apps/*"
 allowBuilds:
   esbuild: true

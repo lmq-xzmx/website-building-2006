@@ -423,6 +423,57 @@ async function cmdAsk(args: Args): Promise<void> {
   console.log(`\n回答：\n${answer}`);
 }
 
+async function cmdSync(args: Args): Promise<void> {
+  const contentPath = args.positional[0];
+  if (!contentPath) {
+    console.error(
+      "用法：geo-kit sync <content.ts> [--out content/knowledge-articles.ts] [--kb <id>] [--database <url>] [--match <正则>] [--tags a,b]",
+    );
+    process.exit(1);
+  }
+
+  const databaseUrl =
+    (args.flags.database as string | undefined) ??
+    process.env.KNOWLEDGE_DATABASE_URL ??
+    process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    console.error(
+      "未配置数据库连接串。需要 --database <url> 或环境变量 KNOWLEDGE_DATABASE_URL / DATABASE_URL。",
+    );
+    process.exit(1);
+  }
+
+  const { runSync, writeKnowledgeModule, renderSyncReport } = await import(
+    "./sync/cli.js"
+  );
+
+  console.log("读取知识库…");
+  const { result, module } = await runSync({
+    databaseUrl,
+    kbId: args.flags.kb as string | undefined,
+    mapping: {
+      idPrefix: args.flags.prefix as string | undefined,
+      titlePattern: args.flags.match as string | undefined,
+      includeTags: args.flags.tags
+        ? String(args.flags.tags).split(",").map((t) => t.trim())
+        : undefined,
+    },
+  });
+
+  console.log(renderSyncReport(result));
+
+  const out = args.flags.out as string | undefined;
+  if (out) {
+    await writeKnowledgeModule(out, module);
+    console.log(`\n写入 ${out}`);
+    console.log(
+      "在内容包里引用：\n  import { knowledgeInsights } from \"./knowledge-articles\";\n  site.insights = knowledgeInsights;",
+    );
+  } else {
+    console.log("\n（未指定 --out，仅报告不写文件）");
+  }
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   switch (args.command) {
@@ -434,6 +485,9 @@ async function main(): Promise<void> {
       break;
     case "copy":
       await cmdCopy(args);
+      break;
+    case "sync":
+      await cmdSync(args);
       break;
     case "ask":
       await cmdAsk(args);
@@ -455,6 +509,10 @@ async function main(): Promise<void> {
 
   geo-kit ask <content.ts> <问题>
       用站内知识库检索并回答（数字分身的知识库侧）
+
+  geo-kit sync <content.ts> [--out content/knowledge-articles.ts] [--kb <id>]
+      从 GEO-Knowledge 的知识库同步内容，产出独立的知识文章模块
+      （不覆盖内容包 —— 手写内容永远安全）
 `);
   }
 }
