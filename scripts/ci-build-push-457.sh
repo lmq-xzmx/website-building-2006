@@ -32,6 +32,30 @@ fi
 
 cd "$SRC"
 
+# ── 把编排产物同步进构建上下文 ──────────────────────────
+# 后台在生产上写的 plan.json / plan.generated.ts 落在宿主的
+# WB_SITES_DIR（卷挂载点），不在源码目录里。
+# 构建前要同步进来 —— 否则站点构建出来的是「只有手写内容」的版本，
+# 后台编排的成果根本没进站。
+if [ -n "${WB_SITES_DIR:-}" ] && [ -d "$WB_SITES_DIR" ]; then
+  echo "=== 同步编排产物：$WB_SITES_DIR → $SRC/sites ==="
+  for site in "$WB_SITES_DIR"/*/; do
+    [ -d "$site" ] || continue
+    name=$(basename "$site")
+    [ -d "$SRC/sites/$name" ] || continue
+    if [ -f "$site/content/plan.generated.ts" ]; then
+      mkdir -p "$SRC/sites/$name/content"
+      cp "$site/content/plan.generated.ts" "$SRC/sites/$name/content/plan.generated.ts"
+      cp "$site/plan.json" "$SRC/sites/$name/plan.json" 2>/dev/null || true
+      echo "  $name: 已带入 plan.generated.ts"
+    else
+      echo "  $name: 无编排产物（只有手写内容）"
+    fi
+  done
+else
+  echo "（未设 WB_SITES_DIR，跳过编排产物同步）"
+fi
+
 echo "=== docker build ==="
 docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
 
