@@ -195,6 +195,9 @@ export function materializeModule(
     if (!item.published) continue;
     // 定时发布未到 → 当作还没发布
     if (!isPublishDue(item.publishAt, now)) continue;
+    // 审核未通过 → 不进站。
+    // 缺 review 字段 = 历史内容，按已通过处理。
+    if (item.review && item.review !== "approved") continue;
     const m = materializeItem(item, items);
     if (m) materialized.push(m);
   }

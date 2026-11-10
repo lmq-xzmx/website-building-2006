@@ -374,6 +374,37 @@ export function validateModulePlan(
       }
       for (const item of module.items ?? []) {
         if (!item.published) continue;
+        // 审核状态 —— 待审与被驳回的内容**不许发布**。
+        //
+        // 为什么拦在发布这一层而不是物化那一层：
+        //   物化跳过它们就够（不会进站），但那样发布者会以为发布成功了 ——
+        //   「站上没有这条」比「发布被拦住并说明原因」难查得多。
+        if (item.review === "pending") {
+          out.push({
+            pageId: page.id,
+            pageTitle: page.title,
+            moduleId: module.id,
+            moduleTitle: module.title ?? module.type,
+            itemId: item.id,
+            itemTitle: item.title ?? item.question ?? "",
+            message: "内容待审核 —— 请先让审核员通过再发布",
+            level: "error",
+          });
+          continue;
+        }
+        if (item.review === "rejected") {
+          out.push({
+            pageId: page.id,
+            pageTitle: page.title,
+            moduleId: module.id,
+            moduleTitle: module.title ?? module.type,
+            itemId: item.id,
+            itemTitle: item.title ?? item.question ?? "",
+            message: "内容被驳回 —— 改完重新提交审核再发布",
+            level: "error",
+          });
+          continue;
+        }
         const problems = validateItem(item, module, items);
         for (const p of problems) {
           p.pageId = page.id;

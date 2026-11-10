@@ -37,10 +37,10 @@ import {
   HISTORY_PANEL_SCRIPT,
 } from "./history-ui.ts";
 
-export async function renderPage(user?: {
-  displayName?: string;
-  name?: string;
-}): Promise<string> {
+export async function renderPage(
+  user?: { displayName?: string; name?: string; role?: string },
+  permissions: string[] = [],
+): Promise<string> {
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -114,6 +114,11 @@ export async function renderPage(user?: {
   .slot input { padding: 2px 6px; font-size: 12px; }
   .grow { flex: 1; min-width: 90px; }
   .drag { cursor: grab; color: var(--dim); user-select: none; }
+  /* 角色标签 —— 让登录者一眼看到自己是谁、能不能发版 */
+  .role-tag {
+    margin-left: 6px; font-size: 11px; padding: 1px 7px; border-radius: 999px;
+    background: var(--panel-2); color: var(--dim); border: 1px solid var(--line);
+  }
   .toast {
     position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
     background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius);
@@ -189,7 +194,9 @@ ${EDITOR_SCRIPT}
 
 <script>
 // 当前登录用户（服务端注入；未开启鉴权时为 null）
-window.__USER__ = ${user ? JSON.stringify({ displayName: user.displayName, name: user.name }).replace(/</g, "\\u003c") : "null"};
+window.__USER__ = ${user ? JSON.stringify({ displayName: user.displayName, name: user.name, role: user.role }).replace(/</g, "\\u003c") : "null"};
+// 权限（服务端注入）—— 前端据此禁用无权操作，而不是等 403 才发现
+window.__PERMS__ = ${JSON.stringify(permissions)};
 
 const $ = (id) => document.getElementById(id);
 
@@ -475,6 +482,13 @@ $("publish").addEventListener("click", async () => {
 if (window.__USER__) {
   const who = $("who");
   who.textContent = window.__USER__.displayName || window.__USER__.name;
+  if (window.__USER__.role) {
+    const tag = document.createElement("span");
+    tag.className = "role-tag";
+    tag.textContent = window.__USER__.role;
+    tag.title = "你的角色 —— 权限由角色决定";
+    who.appendChild(tag);
+  }
   const btn = document.createElement("button");
   btn.textContent = "退出";
   btn.addEventListener("click", () => { location.href = "/logout"; });

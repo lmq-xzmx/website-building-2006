@@ -32,6 +32,15 @@ import type { RichTextDoc } from "../rich-text/types.js";
 /** 条目来源 */
 export type ItemSource = "kb" | "manual";
 
+/**
+ * 审核状态。
+ *
+ * - pending  待审 —— 编辑提交了，审核员还没看
+ * - approved 已通过 —— 可以进站
+ * - rejected 已驳回 —— 要改，改完重新提交
+ */
+export type ItemReview = "pending" | "approved" | "rejected";
+
 /** 模块类型 —— 决定渲染成什么区块 */
 export type ModuleType =
   /** 富文本正文块 */
@@ -106,6 +115,18 @@ export interface ModuleItem {
    * 用于「最新公告」「推荐案例」这类运营位。
    */
   sticky?: boolean;
+  /**
+   * 审核状态 —— 编辑与审核分权。
+   *
+   * 为什么要有：
+   *   以前的发布是「谁改谁发布」—— 编辑手滑就把没写完的内容推上线了。
+   *   分权之后，编辑提交（pending），审核员通过（approved）或驳回（rejected），
+   *   只有 approved 的内容能进站。
+   *
+   * 缺这个字段 = 历史内容（没有审核流程时建的），
+   * 按已通过处理 —— 不让老内容一夜之间全变成「待审」。
+   */
+  review?: ItemReview;
   /** 附加字段 —— 按模块类型解释 */
   /** card-grid + products：规格表 */
   specs?: Array<{ name: string; value: string; unit?: string }>;

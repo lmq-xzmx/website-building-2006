@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node src/server.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@geokit/geo-kit": "workspace:*",

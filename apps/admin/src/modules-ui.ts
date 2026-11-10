@@ -60,6 +60,13 @@ export const MODULE_PANEL_HTML = `
 
 /** 面板的样式 */
 export const MODULE_PANEL_CSS = `
+/* ── 审核状态 ─────────────────────────────────────────── */
+.review-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.review-state { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--panel-2); color: var(--dim); border: 1px solid var(--line); }
+.review-state.pending { color: var(--warn); border-color: var(--warn); }
+.review-state.approved { color: var(--ok); border-color: var(--ok); }
+.review-state.rejected { color: var(err); border-color: var(--err); }
+
 .module-pane {
   flex: 1; display: grid;
   grid-template-columns: 200px 230px 270px 1fr 240px;
@@ -158,6 +165,20 @@ let curPageId = null;
 let curModuleId = null;
 let curItemId = null;
 let modStats = null;
+
+/**
+ * 有没有某个权限 —— 服务端注入 window.__PERMS__。
+ *
+ * 前端据此**禁用**无权操作，而不是让人点了再吃一个 403。
+ * 真正的拦截在服务端（apps/admin/src/server.ts 的 requirePerm）——
+ * 前端只是让人提前知道。
+ */
+function hasPerm(p) {
+  return (window.__PERMS__ ?? []).includes(p);
+}
+
+/** 审核状态的中文名 */
+const REVIEW_LABEL = { pending: "待审核", approved: "已通过", rejected: "已驳回" };
 
 const MOD_TYPE_LABEL = {
   "rich-text": "富文本正文",
@@ -726,7 +747,17 @@ function itemEditorHtml(i, m) {
     '<div class="hint">留空 = 立即发布；到点自动生效（每次发布时判断，不需要后台定时任务）</div></div>' +
     '<div class="actions">' +
     '<button id="me-item-sticky">' + (i.sticky ? "取消置顶" : "置顶") + "</button>" +
-    "</div>";
+    "</div>" +
+    '<div><label>审核状态</label>' +
+    '<div class="review-row">' +
+      '<span class="review-state' + (i.review ? " " + i.review : "") + '">' +
+        (i.review ? (REVIEW_LABEL[i.review] ?? i.review) : "未提交审核") +
+      "</span>" +
+      '<button id="me-review-pending"' + (hasPerm("content.edit") ? "" : " disabled") + ">提交审核</button>" +
+      '<button id="me-review-approved"' + (hasPerm("content.review") ? "" : " disabled") + ">通过</button>" +
+      '<button id="me-review-rejected"' + (hasPerm("content.review") ? "" : " disabled") + ">驳回</button>" +
+    "</div>" +
+    '<div class="hint">只有「已通过」的内容能发布；提交审核是编辑自己的动作，通过与驳回要审核权限</div></div>';
 
   h += '<div class="actions">' +
     '<button id="me-item-save" class="primary">应用到条目</button>' +
@@ -1221,6 +1252,29 @@ function bindModulePanel() {
       toast("已恢复片段内容");
       return;
     }
+    if (t.id === "me-review-pending" || t.id === "me-review-approved" || t.id === "me-review-rejected") {
+      const i = curItem(); const mod = curModule(); const page = curPage();
+      if (!i || !mod || !page) return;
+      const decision = t.id === "me-review-pending" ? "pending"
+        : t.id === "me-review-approved" ? "approved" : "rejected";
+      const r = await fetch(
+        "/api/sites/" + encodeURIComponent(siteId) + "/modules/review",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pageId: page.id, moduleId: mod.id, itemId: i.id, decision,
+          }),
+        },
+      );
+      const d = await r.json();
+      if (d.error) { toast(d.error, true); return; }
+      i.review = decision;
+      renderModules();
+      toast(decision === "pending" ? "已提交审核" :
+            decision === "approved" ? "已通过" : "已驳回");
+      return;
+    }
     if (t.id === "me-item-sticky") {
       const i = curItem(); if (!i) return;
       i.sticky = !i.sticky;
@@ -1274,6 +1328,14 @@ function bindModulePanel() {
     modStats = d.stats;
     toast("编排已保存 → modules.json");
   });
+
+  // 发布按钮按权限禁用 —— 没有发布权限的人点了只会被服务端 403 挡回来，
+  // 不如一开始就是灰的并说明原因。
+  const pubBtn = $("modPublish");
+  if (pubBtn && !hasPerm("content.publish")) {
+    pubBtn.disabled = true;
+    pubBtn.title = "你的角色没有发布权限";
+  }
 
   // ── 发布并重建 ─────────────────────────────────────
   //

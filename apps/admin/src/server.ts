@@ -73,6 +73,13 @@ import {
 } from "@geokit/geo-kit";
 import { renderPage } from "./ui.ts";
 import {
+  can,
+  denyMessage,
+  permissionsOf,
+  ROLE_PERMISSIONS,
+  type Permission,
+} from "./rbac.ts";
+import {
   AUTH_ENABLED,
   CASDOOR_CLIENT_ID,
   CASDOOR_CLIENT_SECRET,
@@ -335,9 +342,24 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
 
+    // ── 权限 ────────────────────────────────────────────
+    //
+    // 认证解决「你是谁」，权限解决「你能干什么」。
+    // 未开鉴权（开发模式）= 全权限，否则开发机根本没法用。
+    const perms: Set<Permission> = AUTH_ENABLED
+      ? permissionsOf(user)
+      : new Set<Permission>(ROLE_PERMISSIONS.admin);
+
+    /** 权限不足就 403 —— 直接返回 false 让调用方收尾 */
+    const requirePerm = (perm: Permission): boolean => {
+      if (perms.has(perm)) return true;
+      json(res, 403, { error: denyMessage(perm), permission: perm });
+      return false;
+    };
+
     // GET / 和 /admin —— 后台界面（把当前用户注入给界面显示）
     if (req.method === "GET" && (path === "/" || path === "/admin")) {
-      const html = await renderPage(user ?? undefined);
+      const html = await renderPage(user ?? undefined, [...perms]);
       res.writeHead(200, {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
@@ -479,6 +501,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     // PUT /api/sites/:id/modules —— 写模块编排（整份）
     const modulesPut = path.match(/^\/api\/sites\/([^/]+)\/modules$/);
     if (req.method === "PUT" && modulesPut) {
+      if (!requirePerm("content.edit")) return;
       const dir = siteDir(modulesPut[1]);
       if (!dir) {
         json(res, 400, { error: "站点 id 非法" });
@@ -513,9 +536,72 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
 
+    // POST /api/sites/:id/modules/review —— 审核状态变更
+    //
+    // 三种动作，对应三种权限：
+    //   pending   提交审核   —— content.edit 就够（编辑自己提交）
+    //   approved  通过       —— content.review
+    //   rejected  驳回       —— content.review
+    //
+    // 「通过/驳回」只有审核员能做，「提交」编辑自己做 ——
+    // 这就是编辑与审核分权的落点。
+    const modulesReview = path.match(/^\/api\/sites\/([^/]+)\/modules\/review$/);
+    if (req.method === "POST" && modulesReview) {
+      const body = await readBody(req);
+      let payload: {
+        pageId?: string;
+        moduleId?: string;
+        itemId?: string;
+        decision?: "pending" | "approved" | "rejected";
+        note?: string;
+      };
+      try {
+        payload = JSON.parse(body) as typeof payload;
+      } catch {
+        json(res, 400, { error: "请求不是合法 JSON" });
+        return;
+      }
+      const decision = payload.decision;
+      if (!decision || !["pending", "approved", "rejected"].includes(decision)) {
+        json(res, 400, { error: "审核动作必须是 pending / approved / rejected" });
+        return;
+      }
+      // 提交审核是编辑自己的动作；通过与驳回要审核权限
+      if (decision !== "pending" && !requirePerm("content.review")) return;
+      if (!requirePerm("content.edit")) return;
+
+      const dir = siteDir(modulesReview[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const plan = await readModulePlan(dir, modulesReview[1]);
+      let hit = 0;
+      for (const page of plan.pages ?? []) {
+        if (payload.pageId && page.id !== payload.pageId) continue;
+        for (const mod of page.modules ?? []) {
+          if (payload.moduleId && mod.id !== payload.moduleId) continue;
+          for (const item of mod.items ?? []) {
+            if (payload.itemId && item.id !== payload.itemId) continue;
+            item.review = decision;
+            hit++;
+          }
+        }
+      }
+      if (!hit) {
+        json(res, 404, { error: "没找到要审核的内容" });
+        return;
+      }
+      plan.updatedAt = new Date().toISOString();
+      await writeModulePlan(dir, plan);
+      json(res, 200, { ok: true, decision, count: hit });
+      return;
+    }
+
     // POST /api/sites/:id/modules/preview —— 预览（不落盘）
     const modulesPreview = path.match(/^\/api\/sites\/([^/]+)\/modules\/preview$/);
     if (req.method === "POST" && modulesPreview) {
+      if (!requirePerm("content.edit")) return;
       const dir = siteDir(modulesPreview[1]);
       if (!dir) {
         json(res, 400, { error: "站点 id 非法" });
@@ -563,6 +649,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       /^\/api\/sites\/([^/]+)\/modules\/publish$/,
     );
     if (req.method === "POST" && modulesPublish) {
+      if (!requirePerm("content.publish")) return;
       const dir = siteDir(modulesPublish[1]);
       if (!dir) {
         json(res, 400, { error: "站点 id 非法" });
@@ -781,6 +868,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     // POST /api/sites/:id/media —— 上传（base64 JSON，不用 multipart）
     const mediaPost = path.match(/^\/api\/sites\/([^/]+)\/media$/);
     if (req.method === "POST" && mediaPost) {
+      if (!requirePerm("content.edit")) return;
       const dir = siteDir(mediaPost[1]);
       if (!dir) {
         json(res, 400, { error: "站点 id 非法" });
@@ -867,6 +955,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     // PUT /api/sites/:id/media/:assetId —— 改 alt / 说明 / 分类
     const mediaPut = path.match(/^\/api\/sites\/([^/]+)\/media\/([^/]+)$/);
     if (req.method === "PUT" && mediaPut) {
+      if (!requirePerm("content.edit")) return;
       const dir = siteDir(mediaPut[1]);
       if (!dir) {
         json(res, 400, { error: "站点 id 非法" });
@@ -899,6 +988,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     // DELETE /api/sites/:id/media/:assetId —— 删资产（连文件一起删）
     const mediaDel = path.match(/^\/api\/sites\/([^/]+)\/media\/([^/]+)$/);
     if (req.method === "DELETE" && mediaDel) {
+      if (!requirePerm("content.edit")) return;
       const dir = siteDir(mediaDel[1]);
       if (!dir) {
         json(res, 400, { error: "站点 id 非法" });
@@ -969,6 +1059,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     // POST /api/sites/:id/fragments —— 从一个模块「存为片段」
     const fragmentsPost = path.match(/^\/api\/sites\/([^/]+)\/fragments$/);
     if (req.method === "POST" && fragmentsPost) {
+      if (!requirePerm("content.edit")) return;
       const dir = siteDir(fragmentsPost[1]);
       if (!dir) {
         json(res, 400, { error: "站点 id 非法" });
@@ -1021,6 +1112,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       /^\/api\/sites\/([^/]+)\/fragments\/([^/]+)$/,
     );
     if (req.method === "PUT" && fragmentsPut) {
+      if (!requirePerm("content.edit")) return;
       const dir = siteDir(fragmentsPut[1]);
       if (!dir) {
         json(res, 400, { error: "站点 id 非法" });
@@ -1071,6 +1163,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       /^\/api\/sites\/([^/]+)\/fragments\/([^/]+)$/,
     );
     if (req.method === "DELETE" && fragmentsDel) {
+      if (!requirePerm("content.edit")) return;
       const dir = siteDir(fragmentsDel[1]);
       if (!dir) {
         json(res, 400, { error: "站点 id 非法" });
@@ -1154,6 +1247,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       /^\/api\/sites\/([^/]+)\/history\/rollback$/,
     );
     if (req.method === "POST" && historyRollback) {
+      if (!requirePerm("content.edit")) return;
       const dir = siteDir(historyRollback[1]);
       if (!dir) {
         json(res, 400, { error: "站点 id 非法" });
