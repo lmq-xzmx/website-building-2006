@@ -16,6 +16,11 @@
 
 import { EDITOR_SCRIPT } from "./editor.ts";
 import { MODULE_PANEL_CSS, MODULE_PANEL_HTML, MODULE_PANEL_SCRIPT } from "./modules-ui.ts";
+import {
+  WECHAT_PANEL_CSS,
+  WECHAT_PANEL_HTML,
+  WECHAT_PANEL_SCRIPT,
+} from "./wechat-ui.ts";
 
 export async function renderPage(user?: {
   displayName?: string;
@@ -109,6 +114,7 @@ export async function renderPage(user?: {
   .tab.on { background: var(--accent); color: #0b1220; font-weight: 600; }
   code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
   ${MODULE_PANEL_CSS}
+  ${WECHAT_PANEL_CSS}
 </style>
 </head>
 <body>
@@ -117,6 +123,7 @@ export async function renderPage(user?: {
   <div class="tabs">
     <button id="tabPlan" class="tab on">编排台</button>
     <button id="tabModule" class="tab">模块</button>
+    <button id="tabWechat" class="tab">公众号</button>
   </div>
   <label>站点 <select id="site"></select></label>
   <label>知识库 <select id="kb"></select></label>
@@ -146,6 +153,8 @@ export async function renderPage(user?: {
 </main>
 
 ${MODULE_PANEL_HTML}
+
+${WECHAT_PANEL_HTML}
 
 <div class="toast" id="toast"></div>
 
@@ -448,6 +457,8 @@ if (window.__USER__) {
 
 ${MODULE_PANEL_SCRIPT}
 
+${WECHAT_PANEL_SCRIPT}
+
 <script>
 // ── 视图切换 ────────────────────────────────────────────
 let currentView = "plan";
@@ -456,21 +467,31 @@ function switchView(v) {
   currentView = v;
   document.querySelector("main").hidden = v !== "plan";
   document.getElementById("modulePane").hidden = v !== "module";
+  document.getElementById("wechatPane").hidden = v !== "wechat";
   document.getElementById("tabPlan").classList.toggle("on", v === "plan");
   document.getElementById("tabModule").classList.toggle("on", v === "module");
+  document.getElementById("tabWechat").classList.toggle("on", v === "wechat");
   // 编排台专属按钮在模块视图下无意义
   document.getElementById("save").hidden = v !== "plan";
   document.getElementById("publish").hidden = v !== "plan";
   if (v === "module") loadModules();
+  if (v === "wechat") {
+    // 公众号排版要基于「当前选中的条目」—— 先确保模块数据已加载
+    if (typeof loadModules === "function" && !modPlan) loadModules();
+    if (typeof wcRenderSide === "function") { wcRenderSide(); wcRenderPreview(); }
+  }
   // 知识库列表的按钮随视图变化（「加入编排」↔「加入模块」）
   renderKb();
 }
 
 document.getElementById("tabPlan").addEventListener("click", () => switchView("plan"));
 document.getElementById("tabModule").addEventListener("click", () => switchView("module"));
+document.getElementById("tabWechat").addEventListener("click", () => switchView("wechat"));
 
 // 模块面板的绑定（在 MODULE_PANEL_SCRIPT 之后执行）
 if (typeof bindModulePanel === "function") bindModulePanel();
+// 公众号排版面板的绑定（在 WECHAT_PANEL_SCRIPT 之后执行）
+if (typeof bindWechatPanel === "function") bindWechatPanel();
 </script>
 </body>
 </html>

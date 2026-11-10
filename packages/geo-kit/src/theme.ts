@@ -9,12 +9,18 @@
  *   1. 主题变体（data-theme="forest|slate|amber"）—— 预置的整套色板
  *   2. 主色覆盖（--color-primary 等）—— 客户指定具体色值
  *   3. 风格（data-style="classic|minimal"）—— 圆角/阴影/留白的整体调性
+ *
+ * 第四层在 layout.ts：**布局变体**（data-layout）——
+ * 改版心宽度、字体气质、区块节奏，是客户一眼能看出不同的那一层。
  */
 
 import type { SiteTheme } from "./types.js";
+import { generateLayoutCss } from "./layout.js";
 
 /**
  * 生成主题 CSS（放在 <style> 里或作为独立文件）。
+ *
+ * 包含三层：色板覆盖 → 质感（style）→ 布局（layout + density）。
  */
 export function generateThemeCss(theme: SiteTheme | undefined): string {
   if (!theme) return "";
@@ -38,6 +44,10 @@ export function generateThemeCss(theme: SiteTheme | undefined): string {
   if (theme.style) {
     lines.push(styleCss(theme.style));
   }
+
+  // 布局变体 —— 客户一眼能看出不同的那一层
+  const layout = generateLayoutCss(theme);
+  if (layout) lines.push(layout);
 
   return lines.join("\n");
 }
@@ -97,8 +107,10 @@ function styleCss(style: NonNullable<SiteTheme["style"]>): string {
 /**
  * html 标签属性。
  *
- * data-theme  → 主题变体（对应 design-tokens.css 的 [data-theme="..."]）
- * data-style  → 风格变体
+ * data-theme   → 主题变体（对应 design-tokens.css 的 [data-theme="..."]）
+ * data-style   → 风格变体
+ * data-layout  → 布局变体（版心宽度、字体气质、区块节奏）
+ * data-density → 信息密度
  * color-scheme → 让浏览器把表单控件与滚动条也切到深色
  */
 export function themeHtmlAttrs(theme: SiteTheme | undefined): Record<string, string> {
@@ -109,6 +121,12 @@ export function themeHtmlAttrs(theme: SiteTheme | undefined): Record<string, str
   }
   if (theme?.style) {
     attrs["data-style"] = theme.style;
+  }
+  if (theme?.layout) {
+    attrs["data-layout"] = theme.layout;
+  }
+  if (theme?.density) {
+    attrs["data-density"] = theme.density;
   }
   if (theme?.respectColorScheme === false) {
     attrs["data-theme"] = theme.variant ?? "light";

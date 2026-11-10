@@ -44,6 +44,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const nav = site.navigation ?? [];
+  // 主题 + 布局的属性合成到 html 标签上
   const themeAttrs = themeHtmlAttrs(site.theme);
   const themeCss = generateThemeCss(site.theme);
 

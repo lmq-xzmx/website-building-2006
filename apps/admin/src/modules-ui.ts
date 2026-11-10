@@ -47,6 +47,11 @@ export const MODULE_PANEL_HTML = `
     </div>
     <div class="pane-body" id="modEditor"></div>
   </aside>
+
+  <aside class="mod-look">
+    <div class="pane-head"><h2>外观</h2></div>
+    <div class="pane-body" id="modLook"></div>
+  </aside>
 </section>
 `;
 
@@ -54,7 +59,7 @@ export const MODULE_PANEL_HTML = `
 export const MODULE_PANEL_CSS = `
 .module-pane {
   flex: 1; display: grid;
-  grid-template-columns: 220px 260px 300px 1fr;
+  grid-template-columns: 200px 230px 270px 1fr 240px;
   min-height: 0; overflow: hidden;
 }
 .module-pane[hidden] { display: none; }
@@ -64,9 +69,31 @@ export const MODULE_PANEL_CSS = `
 }
 .module-pane > aside:last-child { border-right: none; }
 .mod-pages .pane-body, .mod-modules .pane-body,
-.mod-items .pane-body, .mod-edit .pane-body {
+.mod-items .pane-body, .mod-edit .pane-body,
+.mod-look .pane-body {
   overflow-y: auto; padding: 8px; flex: 1;
 }
+
+/* 外观设置 */
+.look-group { margin-bottom: 14px; }
+.look-group > h3 {
+  font-size: 11px; margin: 0 0 6px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.look-opts { display: grid; gap: 4px; }
+.look-opt {
+  text-align: left; padding: 6px 8px; font-size: 12px;
+  display: flex; align-items: center; gap: 7px; line-height: 1.4;
+}
+.look-opt .swatch {
+  width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0;
+  border: 1px solid var(--line);
+}
+.look-opt.on { border-color: var(--accent); background: var(--panel-2); }
+.look-opt .desc { color: var(--dim); font-size: 11px; display: block; }
+.look-field { margin-bottom: 8px; }
+.look-field label { font-size: 11px; color: var(--dim); display: block; margin-bottom: 3px; }
+.look-field input, .look-field select { width: 100%; box-sizing: border-box; font-size: 12px; }
 .mrow {
   border: 1px solid var(--line); border-radius: var(--radius);
   padding: 6px 8px; margin-bottom: 6px; background: var(--panel);
@@ -180,8 +207,63 @@ function renderModules() {
   renderModuleList();
   renderItemList();
   renderModuleEditor();
+  renderLook();
   // 富文本编辑器要在 DOM 建好之后再挂
   mountEditor(curItem());
+}
+
+// ── 外观设置（布局变体 / 质感 / 色板）────────────────────
+
+const LOOK_LAYOUTS = [
+  { id: "centered", label: "窄栏居中", desc: "传统 B2B，稳重克制", swatch: "linear-gradient(135deg,#3b82f6 0%,#3b82f6 50%,#e5e7eb 50%,#e5e7eb 100%)" },
+  { id: "split", label: "左右分栏", desc: "横向节奏，产品/SaaS", swatch: "linear-gradient(135deg,#3b82f6 0%,#3b82f6 45%,#e5e7eb 45%,#e5e7eb 55%,#f9fafb 55%)" },
+  { id: "editorial", label: "杂志编排", desc: "衬线标题大留白，咨询/律所", swatch: "linear-gradient(135deg,#1f2937 0%,#1f2937 30%,#f3f4f6 30%,#f3f4f6 100%)" },
+  { id: "bold", label: "大胆撞色", desc: "超大标题主色块，消费/初创", swatch: "linear-gradient(135deg,#f97316 0%,#f97316 55%,#fff7ed 55%,#fff7ed 100%)" },
+];
+
+const LOOK_STYLES = [
+  { id: "modern", label: "现代（圆角阴影）" },
+  { id: "classic", label: "经典（方正边框）" },
+  { id: "minimal", label: "极简（大留白）" },
+];
+
+const LOOK_VARIANTS = [
+  { id: "default", label: "蓝（默认）", color: "#2f6bff" },
+  { id: "forest", label: "绿（环保/医疗）", color: "#10b981" },
+  { id: "slate", label: "石墨（金融/咨询）", color: "#64748b" },
+  { id: "amber", label: "暖橙（餐饮/零售）", color: "#f59e0b" },
+];
+
+function renderLook() {
+  const el = document.getElementById("modLook");
+  if (!el) return;
+  const a = modPlan?.appearance ?? {};
+
+  const group = (title, options, cur, field) =>
+    '<div class="look-group"><h3>' + title + "</h3><div class='look-opts'>" +
+    options.map((o) =>
+      '<button class="look-opt' + (o.id === cur ? " on" : "") + '" data-look="' + field + '" data-lookval="' + o.id + '">' +
+      (o.swatch ? '<span class="swatch" style="background:' + o.swatch + '"></span>' : "") +
+      (o.color ? '<span class="swatch" style="background:' + o.color + '"></span>' : "") +
+      "<span>" + o.label +
+      (o.desc ? '<span class="desc">' + o.desc + "</span>" : "") +
+      "</span></button>").join("") +
+    "</div></div>";
+
+  el.innerHTML =
+    group("布局变体", LOOK_LAYOUTS, a.layout ?? "", "layout") +
+    group("质感", LOOK_STYLES, a.style ?? "", "style") +
+    group("色板", LOOK_VARIANTS, a.variant ?? "", "variant") +
+    '<div class="look-group"><h3>密度</h3><div class="look-opts">' +
+    [{ id: "comfortable", label: "舒展" }, { id: "compact", label: "紧凑（内容多时用）" }]
+      .map((o) =>
+        '<button class="look-opt' + ((a.density ?? "") === o.id ? " on" : "") +
+        '" data-look="density" data-lookval="' + o.id + '"><span>' + o.label + "</span></button>").join("") +
+    "</div></div>" +
+    '<div class="look-group"><h3>主色</h3>' +
+    '<div class="look-field"><input id="lookPrimary" placeholder="#2f6bff" value="' +
+    mEsc(a.primaryColor ?? "") + '" /></div>' +
+    '<div class="hint">留空 = 用色板默认色</div></div>';
 }
 
 function renderPageList() {
@@ -632,6 +714,30 @@ function bindModulePanel() {
       renderModules();
     }
   });
+
+  // 外观设置
+  const look = document.getElementById("modLook");
+  if (look) {
+    look.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-look]");
+      if (!b) return;
+      const field = b.dataset.look;
+      const val = b.dataset.lookval;
+      if (!modPlan) return;
+      modPlan.appearance = modPlan.appearance ?? {};
+      if (modPlan.appearance[field] === val) delete modPlan.appearance[field];
+      else modPlan.appearance[field] = val;
+      renderLook();
+    });
+    look.addEventListener("change", (e) => {
+      if (e.target.id !== "lookPrimary") return;
+      if (!modPlan) return;
+      modPlan.appearance = modPlan.appearance ?? {};
+      const v = e.target.value.trim();
+      if (v) modPlan.appearance.primaryColor = v;
+      else delete modPlan.appearance.primaryColor;
+    });
+  }
 
   // 保存
   on("modSave", "click", async () => {

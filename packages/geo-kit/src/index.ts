@@ -130,6 +130,15 @@ export {
 } from "./theme.js";
 
 export {
+  layoutCss,
+  densityCss,
+  generateLayoutCss,
+  layoutHtmlAttrs,
+  LAYOUT_VARIANTS,
+  type LayoutVariant,
+} from "./layout.js";
+
+export {
   INDUSTRY_PACKS,
   getIndustryPack,
   applyIndustryPack,
@@ -251,10 +260,20 @@ export {
 
 export { docToHtml, docToMarkdown, escapeHtml } from "./rich-text/render.js";
 
+export {
+  docToWechatHtml,
+  docToWechatText,
+  wechatArticleHtml,
+  WECHAT_THEMES,
+  WECHAT_THEME_LABEL,
+  type WechatTheme,
+} from "./rich-text/wechat.js";
+
 // ── 模块编排（页面 → 模块 → 条目）───────────────────────
 
 export type {
   ModulePlan,
+  SiteAppearance,
   PageDef,
   PageModule,
   ModuleItem,
@@ -296,7 +315,11 @@ export {
   MODULES_FILENAME,
 } from "./modules/store.js";
 
-export { renderModuleModule, mergeModuleContent } from "./modules/generate.js";
+export {
+  renderModuleModule,
+  mergeModuleContent,
+  mergeAppearance,
+} from "./modules/generate.js";
 
 export {
   readPlan,

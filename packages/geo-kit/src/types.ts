@@ -113,7 +113,16 @@ export interface OrganizationContent {
  *
  * 「千行万业」意味着客户站不能长得千篇一律。主题只改**令牌**，
  * 不改组件 —— 换主题的边际成本接近零。
- */export interface SiteTheme {
+ *
+ * 三层机制（从浅到深）：
+ *   1. **variant** —— 色板（forest / slate / amber）
+ *   2. **style**   —— 质感（圆角、阴影、边框的调性）
+ *   3. **layout**  —— 布局形态（版心宽度、字体气质、区块节奏）
+ *
+ * 前两层只改「皮肤」，第三层改「体格」——
+ * 布局变体才是客户一眼能看出不同的那一层。
+ */
+export interface SiteTheme {
   /** 主题变体名：default / forest / slate / amber */
   variant?: "default" | "forest" | "slate" | "amber";
   /** 跟随系统深色模式（默认 true） */
@@ -124,6 +133,20 @@ export interface OrganizationContent {
   accentColor?: string;
   /** 站点风格：modern（圆角、阴影）/ classic（方正、边框）/ minimal（大留白） */
   style?: "modern" | "classic" | "minimal";
+  /**
+   * 布局变体 —— 决定站点的「体格」。
+   *
+   * - centered  窄栏居中，传统 B2B（默认）
+   * - split     左右分栏、模块交替，产品/SaaS 味
+   * - editorial 杂志编排，衬线标题、大留白，咨询/律所/内容站味
+   * - bold      大胆撞色，超大标题与色块，消费/初创味
+   */
+  layout?: "centered" | "split" | "editorial" | "bold";
+  /**
+   * 信息密度：comfortable（舒展，默认）/ compact（紧凑）。
+   * 同样内容密度不同 —— 参数表多的行业适合 compact。
+   */
+  density?: "comfortable" | "compact";
 }
 
 export interface PostalAddress {

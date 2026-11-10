@@ -78,8 +78,8 @@ async function mergePlanContent(contentDir) {
     expr = "mergePlanContent(base, planContent)";
   }
   if (hasModules) {
-    imports.push(`import { modulePages } from "./modules.generated";`);
-    expr = `mergeModuleContent(${expr}, modulePages)`;
+    imports.push(`import { modulePages, appearance } from "./modules.generated";`);
+    expr = `mergeModuleContent(${expr}, modulePages, appearance)`;
   }
 
   const merged = `/**
@@ -277,7 +277,11 @@ async function generateGeoArtifacts(buildDir) {
   }
   if (existsSync(modulesPath)) {
     const modMod = await import(pathToFileURL(modulesPath).href);
-    content = mergeModuleContent(content, modMod.modulePages ?? modMod.default ?? []);
+    content = mergeModuleContent(
+      content,
+      modMod.modulePages ?? modMod.default ?? [],
+      modMod.appearance,
+    );
   }
 
   const artifacts = generateArtifacts(content, { includeLlmsFull: true });

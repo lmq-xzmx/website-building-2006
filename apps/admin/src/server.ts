@@ -50,6 +50,13 @@ import {
   CASDOOR_REDIRECT_URI,
 } from "./config.ts";
 import {
+  docToWechatHtml,
+  docToWechatText,
+  wechatArticleHtml,
+  type WechatTheme,
+} from "@geokit/geo-kit";
+import type { RichTextDoc } from "@geokit/geo-kit";
+import {
   authorizeUrl,
   exchangeCode,
   fetchUserInfo,
@@ -648,6 +655,55 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       kbCache = null;
       await loadKnowledge(true);
       json(res, 200, { ok: true });
+      return;
+    }
+
+    // ── 公众号排版 ─────────────────────────────────────
+    //
+    // 渲染逻辑放在服务端（geo-kit 里只有一份实现，浏览器端不重复写）。
+    // 前端预览与「复制到微信」走同一个接口 —— 所见即所得。
+    //
+    // bare: 只返回正文（复制到微信时用，标题在微信里单独填）
+    // plain: 返回纯文本
+    if (req.method === "POST" && path === "/api/wechat/render") {
+      const body = await readBody(req);
+      let req_: {
+        doc?: unknown;
+        title?: string;
+        author?: string;
+        theme?: string;
+        bare?: boolean;
+        plain?: boolean;
+      };
+      try {
+        req_ = JSON.parse(body) as typeof req_;
+      } catch {
+        json(res, 400, { error: "请求不是合法 JSON" });
+        return;
+      }
+
+      const doc = req_.doc as RichTextDoc | undefined;
+      const theme = (req_.theme ?? "default") as WechatTheme;
+
+      if (req_.plain) {
+        json(res, 200, { text: docToWechatText(doc) });
+        return;
+      }
+
+      if (req_.bare) {
+        // 剥掉外层 section —— 微信编辑器里标题与作者单独填更灵活
+        const html = docToWechatHtml(doc, theme);
+        json(res, 200, { html });
+        return;
+      }
+
+      json(res, 200, {
+        html: wechatArticleHtml(doc, {
+          title: req_.title,
+          author: req_.author,
+          theme,
+        }),
+      });
       return;
     }
 

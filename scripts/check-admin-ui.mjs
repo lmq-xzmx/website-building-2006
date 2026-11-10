@@ -40,7 +40,9 @@ for (const block of scriptBlocks) {
 
 // ── 2. 全局函数必须有定义 ──────────────────────────────
 // 页面里被调用但从未定义的 window.xxx / 裸函数
-const requiredGlobals = ["__rte", "__rteHtml", "__modAddKbItem", "__modAddManualItem"];
+const requiredGlobals = [
+  "__rte", "__rteHtml", "__modAddKbItem", "__modAddManualItem",
+];
 for (const name of requiredGlobals) {
   const defined = new RegExp(`window\\.${name}\\s*=`).test(html);
   if (!defined) problems.push(`全局 ${name} 未定义`);
@@ -49,12 +51,13 @@ for (const name of requiredGlobals) {
 // ── 3. 关键 DOM id ──────────────────────────────────────
 const ids = [
   "site", "kb", "q", "reload", "save", "publish", "who",
-  "tabPlan", "tabModule", "modulePane",
+  "tabPlan", "tabModule", "tabWechat", "modulePane", "wechatPane",
   "modAddPage", "modPageList",
   "modAddModule", "modModuleList",
   "modAddManual", "modItemList", "modItemCount",
-  "modEditor", "modSave",
+  "modEditor", "modSave", "modLook",
   "kbList", "kbCount", "planList", "planCount", "checkPane",
+  "wcSide", "wcPreview", "wcCopyRich", "wcCopyPlain",
   "toast",
 ];
 for (const id of ids) {
@@ -87,6 +90,10 @@ const builtin = new Set([
   "encodeURIComponent", "decodeURIComponent", "fetch", "alert", "confirm",
   "setTimeout", "clearTimeout", "setInterval", "clearInterval",
   "require", "console", "document", "window", "location", "navigator",
+  "Blob", "ClipboardItem", "File", "FileReader", "FormData", "URL",
+  "URLSearchParams", "AbortController", "TextEncoder", "TextDecoder",
+  // CSS 函数名 —— 出现在 style 字符串里，不是 JS 调用
+  "gradient", "translateX", "translateY", "scale", "rotate", "var", "calc",
 ]);
 
 for (const name of called) {

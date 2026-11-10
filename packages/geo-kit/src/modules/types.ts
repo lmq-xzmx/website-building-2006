@@ -148,6 +148,33 @@ export interface ModulePlan {
   kbId: string;
   updatedAt: string;
   pages: PageDef[];
+  /**
+   * 站点级外观配置 —— 后台可选的布局与主题。
+   *
+   * 为什么放这里而不是 site.ts：
+   *   site.ts 是**人写、机器不碰**的内容包（分层铁律）。
+   *   外观是「客户想要什么样子」的决策，属于后台管辖的范围，
+   *   而且换外观不该动内容包 —— 改内容包要走代码评审，太重。
+   *
+   * 与手写 theme 的关系：**后台的设置覆盖手写的**（同 plan 与内容包的关系）。
+   */
+  appearance?: SiteAppearance;
+}
+
+/** 站点级外观配置 */
+export interface SiteAppearance {
+  /** 布局变体 —— 客户一眼能看出不同的那一层 */
+  layout?: "centered" | "split" | "editorial" | "bold";
+  /** 信息密度 */
+  density?: "comfortable" | "compact";
+  /** 质感（圆角、阴影的调性） */
+  style?: "modern" | "classic" | "minimal";
+  /** 色板变体 */
+  variant?: "default" | "forest" | "slate" | "amber";
+  /** 覆盖主色（十六进制） */
+  primaryColor?: string;
+  /** 覆盖强调色 */
+  accentColor?: string;
 }
 
 /** 空编排 */

@@ -11,8 +11,8 @@
  *   export const modulePages: PageContent[] = [...];
  */
 
-import type { PageContent, SiteContent } from "../types.js";
-import type { ModulePlan } from "./types.js";
+import type { PageContent, SiteContent, SiteTheme } from "../types.js";
+import type { ModulePlan, SiteAppearance } from "./types.js";
 
 /**
  * 构建期合并 —— 把**已物化**的模块页面叠加到手写内容包上。
@@ -24,11 +24,35 @@ import type { ModulePlan } from "./types.js";
 export function mergeModuleContent(
   base: SiteContent,
   pages: PageContent[],
+  appearance?: SiteAppearance,
 ): SiteContent {
-  return {
+  const content: SiteContent = {
     ...base,
     pages: [...pages, ...(base.pages ?? [])],
   };
+
+  // 后台的外观设置覆盖手写主题 —— 后台说了算
+  if (appearance && Object.keys(appearance).length > 0) {
+    content.theme = mergeAppearance(base.theme, appearance);
+  }
+
+  return content;
+}
+
+/**
+ * 合并外观配置 —— 后台的非空项覆盖手写的。
+ */
+export function mergeAppearance(
+  base: SiteTheme | undefined,
+  appearance: SiteAppearance,
+): SiteTheme {
+  const merged: SiteTheme = { ...(base ?? {}) };
+  for (const [k, v] of Object.entries(appearance)) {
+    if (v !== undefined && v !== null && v !== "") {
+      (merged as Record<string, unknown>)[k] = v;
+    }
+  }
+  return merged;
 }
 
 /**
@@ -58,8 +82,12 @@ export function renderModuleModule(
  */
 
 import type { PageContent } from "@geokit/geo-kit";
+import type { SiteAppearance } from "@geokit/geo-kit";
 
 export const modulePages: PageContent[] = ${JSON.stringify(pages, null, 2)};
+
+/** 站点级外观配置 —— 后台选定，覆盖手写 theme */
+export const appearance: SiteAppearance = ${JSON.stringify(plan.appearance ?? {}, null, 2)};
 
 export default modulePages;
 `;

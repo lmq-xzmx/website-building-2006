@@ -10,6 +10,14 @@
 
 @import "./design-tokens.css";
 
+/* 布局变量的默认值 —— layout 变体会覆盖它们 */
+:root {
+  --hero-title-size: var(--text-5xl);
+  --section-title-size: var(--text-3xl);
+  --grid-gap: var(--space-6);
+  --font-display: var(--font-sans);
+}
+
 /* ── 基础 ───────────────────────────────────────────────── */
 
 *,
@@ -231,7 +239,7 @@ img {
 
 .section-head h1,
 .section-head h2 {
-  font-size: var(--text-3xl);
+  font-size: var(--section-title-size, var(--text-3xl));
   margin: 0 0 var(--space-4);
 }
 
@@ -305,7 +313,7 @@ img {
 
 .grid {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--grid-gap, var(--space-6));
 }
 
 .grid-2 {
@@ -409,7 +417,8 @@ img {
 }
 
 .hero h1 {
-  font-size: var(--text-5xl);
+  /* 布局变体可覆盖标题尺寸 —— bold/editorial 要比默认更大 */
+  font-size: var(--hero-title-size, var(--text-5xl));
   margin: 0 0 var(--space-6);
   max-width: 20ch;
 }
