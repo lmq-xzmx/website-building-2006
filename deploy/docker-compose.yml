@@ -24,6 +24,10 @@ services:
       ADMIN_HOST: 0.0.0.0
       ADMIN_PORT: "5105"
       SITES_DIR: /srv/app/sites
+    volumes:
+      # 站点目录挂出来 —— 后台要写 plan.json / plan.generated.ts。
+      # 不挂的话这些只存在容器可写层，**容器重建即丢**。
+      - ${WB_SITES_DIR:-/data/website-building/sites}:/srv/app/sites
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

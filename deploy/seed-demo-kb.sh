@@ -19,23 +19,14 @@ PG_USER=${PG_USER:-postgres}
 KB_NAME=${KB_NAME:-"建站示范库"}
 
 echo "== 1. 建示范知识库 =="
-docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -v ON_ERROR_STOP=1 <<'SQL'
--- ⚠️ knowledge_bases.id 是 varchar(36) 不是 uuid —— 用 varchar 比较
-DO $$
-DECLARE
-  kb_id varchar(36) := 'a1b2c3d4-0000-4000-8000-000000000001';
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM knowledge_bases WHERE id = kb_id) THEN
-    INSERT INTO knowledge_bases (id, name, description, item_count, kb_type, sync_strategy)
-    VALUES (kb_id, '建站示范库',
-            '用于演示「知识库 → 网站内容」的编排流程。与云枢科技 SaaS 站点业务匹配。',
-            6, 'mixed', 'manual');
-    RAISE NOTICE '已创建建站示范库';
-  ELSE
-    RAISE NOTICE '建站示范库已存在，跳过创建';
-  END IF;
-END $$;
-SQL
+# 用直接的 INSERT ... ON CONFLICT，不用 DO $$ 块 ——
+# DO 块经 heredoc 传给 docker exec 时，错误容易被吞掉（静默失败）。
+docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -v ON_ERROR_STOP=1 -c \
+  "INSERT INTO knowledge_bases (id, name, description, item_count, kb_type, sync_strategy)
+   VALUES ('a1b2c3d4-0000-4000-8000-000000000001', '建站示范库',
+           '用于演示「知识库 → 网站内容」的编排流程。与云枢科技 SaaS 站点业务匹配。',
+           6, 'mixed', 'manual')
+   ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description;"
 
 echo "== 2. 灌示范条目 =="
 docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -v ON_ERROR_STOP=1 <<'SQL'

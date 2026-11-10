@@ -19,6 +19,7 @@ WB_DEPLOY_DIR=${WB_DEPLOY_DIR:-/data/website-building}
 WB_SECRETS=${WB_SECRETS:-/data/secrets/wb.env}
 WB_SITE_PORT=${WB_SITE_PORT:-3019}
 WB_ADMIN_PORT=${WB_ADMIN_PORT:-3020}
+WB_SITES_DIR=${WB_SITES_DIR:-/data/website-building/sites}
 PG_CONTAINER=${PG_CONTAINER:-WeKnora-postgres}
 PG_DB=${PG_DB:-geo_knowledge}
 PG_USER=${PG_USER:-postgres}
@@ -26,6 +27,22 @@ PG_USER=${PG_USER:-postgres}
 echo "== 1. 部署目录 =="
 mkdir -p "$WB_DEPLOY_DIR"
 echo "  $WB_DEPLOY_DIR 就绪"
+
+echo "== 1.1 站点目录（卷挂载点）=="
+# 站点目录挂到容器 /srv/app/sites —— 后台在这里写 plan.json / plan.generated.ts。
+# 内容包的初值来自源码仓库（如果给了 WB_SRC），否则沿用已有目录。
+mkdir -p "$WB_SITES_DIR"
+if [ -n "${WB_SRC:-}" ] && [ -d "$WB_SRC/sites/demo-saas/content" ]; then
+  if [ ! -f "$WB_SITES_DIR/demo-saas/content/site.ts" ]; then
+    mkdir -p "$WB_SITES_DIR/demo-saas/content"
+    cp "$WB_SRC/sites/demo-saas/content/site.ts" "$WB_SITES_DIR/demo-saas/content/site.ts"
+    echo "  已从源码初始化 demo-saas 内容包"
+  else
+    echo "  demo-saas 内容包已存在，保留（编排结果不覆盖）"
+  fi
+else
+  echo "  目录就绪（未给 WB_SRC，不初始化内容包）"
+fi
 
 echo "== 2. 编排文件 =="
 if [ -f "$WB_DEPLOY_DIR/docker-compose.yml" ]; then
@@ -46,6 +63,10 @@ services:
       ADMIN_HOST: 0.0.0.0
       ADMIN_PORT: "5105"
       SITES_DIR: /srv/app/sites
+    volumes:
+      # 站点目录挂出来 —— 后台要写 plan.json / plan.generated.ts。
+      # 不挂的话这些只存在容器可写层，容器重建即丢。
+      - \${WB_SITES_DIR:-$WB_SITES_DIR}:/srv/app/sites
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
