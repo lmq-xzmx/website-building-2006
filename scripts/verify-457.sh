@@ -41,12 +41,16 @@ curl -s -o /dev/null -w "    %{redirect_url}\n" "$BASE/admin"
 echo ""
 echo "════ 5. 模块编排内容 ════"
 echo "  站点上的模块页面（从 sitemap 找）："
+# sitemap 里是**公网绝对地址**（客户域名）—— 生产机通常解析不了外网域名，
+# 直接 curl 会得到 exit 6（could not resolve host），把整个验收脚本带崩。
+# 这里把 host 换成本机的 BASE，只测路径。
 curl -s "$BASE/sitemap.xml" | grep -o "<loc>[^<]*</loc>" | sed 's/<[^>]*>//g' | while read -r u; do
   case "$u" in
     */products*|*/cases*|*/insights*|*/about*|*/faq*|*/contact*) continue ;;
   esac
-  code=$(curl -s -o /dev/null -w '%{http_code}' "$u")
-  echo "    $code  $u"
+  local_u=$(printf '%s' "$u" | sed "s|^https\{0,1\}://[^/]*|$BASE|")
+  code=$(curl -s -o /dev/null -w '%{http_code}' "$local_u" || echo "000")
+  echo "    $code  $local_u"
 done
 
 echo ""
