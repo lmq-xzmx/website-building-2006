@@ -38,6 +38,25 @@ import {
   type ModulePlan,
 } from "@geokit/geo-kit";
 
+// ── 片段（可复用组件）与版本历史 ─────────────────────────
+//
+// 这两块都是「后台管的机器可写层」：
+//   fragments.json      片段库（一份内容多处引用）
+//   history/<版本号>.json 编排快照（发布留档、可对比、可回滚）
+
+import {
+  diffPlans,
+  moduleToFragment,
+  readFragmentLibrary,
+  readVersionIndex,
+  readVersionPlan,
+  rollbackToVersion,
+  snapshotPlan,
+  validateFragment,
+  writeFragmentLibrary,
+  type FragmentMap,
+} from "@geokit/geo-kit";
+
 import { DATABASE_URL, HAS_DB, HOST, PORT, SITES_DIR, listSites } from "./config.ts";
 import { rebuildSite } from "./build.ts";
 import { writeFile, rm } from "node:fs/promises";
@@ -205,6 +224,26 @@ function siteDir(id: string): string | null {
   // 防目录穿越 —— siteId 只能是单层目录名
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) return null;
   return resolve(SITES_DIR, id);
+}
+
+/**
+ * 读片段库并转成查找表。
+ *
+ * 编排里引用片段时，物化与校验都要按**展开后的内容**走，
+ * 所以两条链路都得拿到同一份片段表。
+ */
+async function loadFragments(
+  dir: string,
+  siteId: string,
+): Promise<{ lib: Awaited<ReturnType<typeof readFragmentLibrary>>; map: FragmentMap }> {
+  const lib = await readFragmentLibrary(dir, siteId);
+  const map: FragmentMap = new Map(lib.fragments.map((f) => [f.id, f]));
+  return { lib, map };
+}
+
+/** 操作者 —— 有会话用会话里的用户名，没有就记「本地」 */
+function actorOf(user: { name?: string; displayName?: string } | null): string {
+  return user?.name?.trim() || user?.displayName?.trim() || "本地";
 }
 
 // ── 路由 ────────────────────────────────────────────────
@@ -427,7 +466,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         return;
       }
       const plan = await readModulePlan(dir, modulesGet[1]);
-      json(res, 200, { plan, stats: modulePlanStats(plan) });
+      const { map } = await loadFragments(dir, modulesGet[1]);
+      json(res, 200, {
+        plan,
+        stats: modulePlanStats(plan, map),
+        // 片段表一起给 —— 后台的模块面板要显示「引用片段」与「脱离引用」
+        fragments: [...map.values()],
+      });
       return;
     }
 
@@ -463,7 +508,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       }
 
       await writeModulePlan(dir, plan);
-      json(res, 200, { ok: true, stats: modulePlanStats(plan) });
+      const { map } = await loadFragments(dir, modulesPut[1]);
+      json(res, 200, { ok: true, stats: modulePlanStats(plan, map) });
       return;
     }
 
@@ -498,12 +544,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         return;
       }
 
-      const { pages, skipped } = materializeModulePlan(plan, allItems);
+      const { map } = await loadFragments(dir, modulesPreview[1]);
+      const { pages, skipped } = materializeModulePlan(plan, allItems, map);
       json(res, 200, {
         pages,
         skipped,
-        problems: validateModulePlan(plan, allItems),
-        stats: modulePlanStats(plan),
+        problems: validateModulePlan(plan, allItems, map),
+        stats: modulePlanStats(plan, map),
       });
       return;
     }
@@ -532,8 +579,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       }
 
       const plan = await readModulePlan(dir, modulesPublish[1]);
-      const problems = validateModulePlan(plan, allItems);
-      const { pages, skipped } = materializeModulePlan(plan, allItems);
+      const { map } = await loadFragments(dir, modulesPublish[1]);
+      const problems = validateModulePlan(plan, allItems, map);
+      const { pages, skipped } = materializeModulePlan(plan, allItems, map);
 
       // 有 error 级问题就不落盘 —— 发布空壳比不发布更糟
       const errors = problems.filter((p) => p.level === "error");
@@ -544,6 +592,25 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
           skipped,
         });
         return;
+      }
+
+      // ── 留档：把这一版编排存成版本 ────────────────────
+      //
+      // 为什么要留：**发布是覆盖写** modules.json，
+      // 出错只能靠 git 回滚 —— 那太粗（会把别的站点一起带走）。
+      // 快照让「回到上一版」变成后台里的一个动作。
+      //
+      // 留档失败**不阻止发布** —— 版本是辅助功能，
+      // 不能因为它坏了就把客户的内容卡住。
+      let version: { id: string; createdAt: string } | null = null;
+      try {
+        const entry = await snapshotPlan(dir, modulesPublish[1], plan, {
+          author: actorOf(user),
+          reason: "发布",
+        });
+        version = { id: entry.id, createdAt: entry.createdAt };
+      } catch (err) {
+        console.error("版本留档失败：", err);
       }
 
       const { writeFile } = await import("node:fs/promises");
@@ -579,9 +646,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         ok: true,
         problems,
         skipped,
-        stats: modulePlanStats(plan),
+        stats: modulePlanStats(plan, map),
         written: outPath,
         pages: pages.length,
+        // 本次发布留下的版本号 —— 出错时去「版本」标签页回滚
+        version,
         // 重建结果 —— 失败不算发布失败（产物已落盘），
         // 但必须明确告诉用户「站点还没更新」
         rebuild,
@@ -855,6 +924,310 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         /* 文件删不掉不阻塞 —— 清单已更新 */
       }
       json(res, 200, { ok: true });
+      return;
+    }
+
+    // ── 可复用片段（片段 = 可复用的模块）────────────────
+    //
+    // 一份内容多处引用 —— 「公司简介」「联系方式」「常见问题」这类
+    // 在企业门户里反复出现的内容。复制粘贴会让客户改一次要改三处，
+    // 漏一处线上就自相矛盾（AI 抓取时当成两个实体）。
+    //
+    // 片段落在 sites/<id>/fragments.json —— 与 modules.json 同级。
+
+    // GET /api/sites/:id/fragments —— 列出片段
+    const fragmentsGet = path.match(/^\/api\/sites\/([^/]+)\/fragments$/);
+    if (req.method === "GET" && fragmentsGet) {
+      const dir = siteDir(fragmentsGet[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const lib = await readFragmentLibrary(dir, fragmentsGet[1]);
+      // 片段也要过一遍校验 —— 片段里的条目按现有模块类型的规则查，
+      // 不然「引用一个坏片段」会等到发布时才炸。
+      const kb = await loadKnowledge();
+      const allItems = new Map<string, KnowledgeItem>();
+      if (kb) {
+        for (const items of kb.itemsByKb.values()) {
+          for (const i of items) allItems.set(i.id, i);
+        }
+      }
+      const problems = kb
+        ? lib.fragments.flatMap((f) =>
+            validateFragment(f, allItems).map((p) => ({ ...p, fragmentId: f.id })),
+          )
+        : [];
+      json(res, 200, {
+        fragments: lib.fragments,
+        updatedAt: lib.updatedAt,
+        problems,
+      });
+      return;
+    }
+
+    // POST /api/sites/:id/fragments —— 从一个模块「存为片段」
+    const fragmentsPost = path.match(/^\/api\/sites\/([^/]+)\/fragments$/);
+    if (req.method === "POST" && fragmentsPost) {
+      const dir = siteDir(fragmentsPost[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const body = await readBody(req);
+      let payload: {
+        name?: string;
+        description?: string;
+        module?: Partial<ModulePlan["pages"][number]["modules"][number]>;
+      };
+      try {
+        payload = JSON.parse(body) as typeof payload;
+      } catch {
+        json(res, 400, { error: "请求不是合法 JSON" });
+        return;
+      }
+      if (!payload.module) {
+        json(res, 400, { error: "缺少模块内容 —— 片段必须从一段真实内容来" });
+        return;
+      }
+
+      const module = payload.module;
+      const fragment = moduleToFragment(
+        {
+          id: "",
+          type: module.type ?? "rich-text",
+          title: module.title,
+          subtitle: module.subtitle,
+          items: module.items ?? [],
+          props: module.props,
+          order: 0,
+          enabled: true,
+        },
+        payload.name ?? module.title ?? "未命名片段",
+        payload.description,
+      );
+
+      const lib = await readFragmentLibrary(dir, fragmentsPost[1]);
+      lib.fragments.push(fragment);
+      lib.updatedAt = new Date().toISOString();
+      await writeFragmentLibrary(dir, lib);
+
+      json(res, 200, { ok: true, fragment });
+      return;
+    }
+
+    // PUT /api/sites/:id/fragments/:fid —— 改名 / 改说明 / 改内容
+    const fragmentsPut = path.match(
+      /^\/api\/sites\/([^/]+)\/fragments\/([^/]+)$/,
+    );
+    if (req.method === "PUT" && fragmentsPut) {
+      const dir = siteDir(fragmentsPut[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const body = await readBody(req);
+      let patch: {
+        name?: string;
+        description?: string;
+        module?: Partial<ModulePlan["pages"][number]["modules"][number]>;
+      };
+      try {
+        patch = JSON.parse(body) as typeof patch;
+      } catch {
+        json(res, 400, { error: "请求不是合法 JSON" });
+        return;
+      }
+
+      const lib = await readFragmentLibrary(dir, fragmentsPut[1]);
+      const fragment = lib.fragments.find((f) => f.id === fragmentsPut[2]);
+      if (!fragment) {
+        json(res, 404, { error: "片段不存在" });
+        return;
+      }
+      if (patch.name !== undefined) fragment.name = patch.name;
+      if (patch.description !== undefined) fragment.description = patch.description;
+      if (patch.module) {
+        const m = patch.module;
+        if (m.type) fragment.type = m.type;
+        if (m.title !== undefined) fragment.title = m.title;
+        if (m.subtitle !== undefined) fragment.subtitle = m.subtitle;
+        if (m.items) fragment.items = m.items;
+        if (m.props !== undefined) fragment.props = m.props;
+      }
+      fragment.updatedAt = new Date().toISOString();
+      lib.updatedAt = fragment.updatedAt;
+      await writeFragmentLibrary(dir, lib);
+
+      json(res, 200, { ok: true, fragment });
+      return;
+    }
+
+    // DELETE /api/sites/:id/fragments/:fid —— 删片段
+    //
+    // 被引用着的话要拦一下 —— 直接删会让引用它的页面校验失败。
+    // 真的要删就带 ?force=1（后台界面会提示用户先脱离引用）。
+    const fragmentsDel = path.match(
+      /^\/api\/sites\/([^/]+)\/fragments\/([^/]+)$/,
+    );
+    if (req.method === "DELETE" && fragmentsDel) {
+      const dir = siteDir(fragmentsDel[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const lib = await readFragmentLibrary(dir, fragmentsDel[1]);
+      const idx = lib.fragments.findIndex((f) => f.id === fragmentsDel[2]);
+      if (idx < 0) {
+        json(res, 404, { error: "片段不存在" });
+        return;
+      }
+
+      if (url.searchParams.get("force") !== "1") {
+        const plan = await readModulePlan(dir, fragmentsDel[1]);
+        const used: string[] = [];
+        for (const page of plan.pages ?? []) {
+          for (const m of page.modules ?? []) {
+            if (m.fragmentId === fragmentsDel[2]) {
+              used.push(`${page.title || page.path} › ${m.title || m.type}`);
+            }
+          }
+        }
+        if (used.length) {
+          json(res, 409, {
+            error: `片段正在被 ${used.length} 处引用 —— 先改成自有内容再删`,
+            used,
+          });
+          return;
+        }
+      }
+
+      lib.fragments.splice(idx, 1);
+      lib.updatedAt = new Date().toISOString();
+      await writeFragmentLibrary(dir, lib);
+      json(res, 200, { ok: true });
+      return;
+    }
+
+    // ── 版本历史（快照 / 对比 / 回滚）────────────────────
+    //
+    // 每次发布留一份快照在 sites/<id>/history/，
+    // 出错时不用靠 git 回滚 —— 那会把别的站点一起带走。
+
+    // POST /api/sites/:id/history/diff —— 对比某版本与当前
+    const historyDiff = path.match(/^\/api\/sites\/([^/]+)\/history\/diff$/);
+    if (req.method === "POST" && historyDiff) {
+      const dir = siteDir(historyDiff[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const body = await readBody(req);
+      let payload: { versionId?: string };
+      try {
+        payload = JSON.parse(body) as typeof payload;
+      } catch {
+        json(res, 400, { error: "请求不是合法 JSON" });
+        return;
+      }
+      if (!payload.versionId) {
+        json(res, 400, { error: "缺少版本号" });
+        return;
+      }
+      const versionPlan = await readVersionPlan(dir, payload.versionId);
+      if (!versionPlan) {
+        json(res, 404, { error: "版本不存在" });
+        return;
+      }
+      const current = await readModulePlan(dir, historyDiff[1]);
+      const diff = diffPlans(versionPlan, current);
+      json(res, 200, {
+        versionId: payload.versionId,
+        diff,
+        current: modulePlanStats(current),
+      });
+      return;
+    }
+
+    // POST /api/sites/:id/history/rollback —— 回滚到某个版本
+    const historyRollback = path.match(
+      /^\/api\/sites\/([^/]+)\/history\/rollback$/,
+    );
+    if (req.method === "POST" && historyRollback) {
+      const dir = siteDir(historyRollback[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const body = await readBody(req);
+      let payload: { versionId?: string };
+      try {
+        payload = JSON.parse(body) as typeof payload;
+      } catch {
+        json(res, 400, { error: "请求不是合法 JSON" });
+        return;
+      }
+      if (!payload.versionId) {
+        json(res, 400, { error: "缺少版本号" });
+        return;
+      }
+      const index = await readVersionIndex(dir, historyRollback[1]);
+      const entry = index.versions.find((v) => v.id === payload.versionId);
+      if (!entry) {
+        json(res, 404, { error: "版本不存在" });
+        return;
+      }
+
+      // 回滚的逻辑在 geo-kit 里（版本快照 → 写回编排 → 再留一档）
+      const result = await rollbackToVersion(
+        dir,
+        historyRollback[1],
+        payload.versionId,
+        { author: actorOf(user) },
+      );
+      if (!result) {
+        json(res, 404, { error: "版本快照已丢失" });
+        return;
+      }
+
+      json(res, 200, {
+        ok: true,
+        version: result.version,
+        stats: modulePlanStats(result.restored),
+        hint: "已恢复编排 —— 点「发布并重建」让站点生效",
+      });
+      return;
+    }
+
+    // GET /api/sites/:id/history —— 版本列表
+    const historyList = path.match(/^\/api\/sites\/([^/]+)\/history$/);
+    if (req.method === "GET" && historyList) {
+      const dir = siteDir(historyList[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const index = await readVersionIndex(dir, historyList[1]);
+      json(res, 200, { versions: index.versions, updatedAt: index.updatedAt });
+      return;
+    }
+
+    // GET /api/sites/:id/history/:vid —— 某个版本（含编排快照）
+    const historyGet = path.match(/^\/api\/sites\/([^/]+)\/history\/([^/]+)$/);
+    if (req.method === "GET" && historyGet) {
+      const dir = siteDir(historyGet[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const index = await readVersionIndex(dir, historyGet[1]);
+      const entry = index.versions.find((v) => v.id === historyGet[2]);
+      const plan = await readVersionPlan(dir, historyGet[2]);
+      if (!entry && !plan) {
+        json(res, 404, { error: "版本不存在" });
+        return;
+      }
+      json(res, 200, { entry: entry ?? null, plan });
       return;
     }
 

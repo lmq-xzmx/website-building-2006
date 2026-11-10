@@ -26,6 +26,8 @@ export const MODULE_PANEL_HTML = `
   <aside class="mod-modules">
     <div class="pane-head">
       <h2>模块</h2><span class="sp"></span>
+      <select id="modFragSel" title="插入一个片段引用"><option value="">插片段…</option></select>
+      <button id="modAddFragment">插入</button>
       <button id="modAddModule">+ 加模块</button>
     </div>
     <div class="pane-body" id="modModuleList"></div>
@@ -202,7 +204,48 @@ function curModule() {
 }
 function curItem() {
   const m = curModule();
-  return (m?.items ?? []).find((i) => i.id === curItemId) ?? null;
+  // 引用片段的模块 —— 条目在片段里，要按展开后的找
+  const rm = resolvedModule(m);
+  return (rm?.items ?? []).find((i) => i.id === curItemId) ?? null;
+}
+
+// ── 片段（可复用组件）───────────────────────────────────
+//
+// 引用片段的模块，内容不在模块里 —— 在片段里。
+// 前端要按「展开后」的样子展示，所以这里也做一次展开
+// （服务端物化时展开一次，两边各一份 —— 后端那份是权威）。
+
+function fragById(id) {
+  const list = (typeof window !== "undefined" && window.geoFragments) || [];
+  return list.find((f) => f.id === id) ?? null;
+}
+
+/** 展开片段引用 —— 片段内容 + 局部覆盖 */
+function resolvedModule(m) {
+  if (!m || !m.fragmentId) return m;
+  const f = fragById(m.fragmentId);
+  if (!f) return m;
+  const ov = m.overrides || {};
+  const items = (f.items || []).map((it) => {
+    const o = (ov.items || []).find((x) => x.itemId === it.id);
+    if (!o) return it;
+    if (o.hidden) return null;
+    const out = { ...it };
+    for (const k of ["title", "summary", "question", "answer", "image", "value",
+      "unit", "label", "href", "client", "results", "specs", "alt", "caption",
+      "step", "published"]) {
+      if (o[k] !== undefined) out[k] = o[k];
+    }
+    return out;
+  }).filter(Boolean);
+  return {
+    ...m,
+    type: f.type,
+    title: ov.title !== undefined ? ov.title : (m.title !== undefined ? m.title : f.title),
+    subtitle: ov.subtitle !== undefined ? ov.subtitle : (m.subtitle !== undefined ? m.subtitle : f.subtitle),
+    props: { ...(f.props || {}), ...(ov.props || {}) },
+    items,
+  };
 }
 
 async function loadModules() {
@@ -211,6 +254,9 @@ async function loadModules() {
   const d = await r.json();
   modPlan = d.plan ?? { version: 1, siteId, kbId: "default", updatedAt: "", pages: [] };
   modStats = d.stats ?? null;
+  // 片段表一起拿 —— 引用/脱离/存为片段都要用
+  if (d.fragments) window.geoFragments = d.fragments;
+  await loadFragments();
   if (!curPageId || !modPlan.pages.some((p) => p.id === curPageId)) {
     curPageId = modPlan.pages[0]?.id ?? null;
     curModuleId = null;
@@ -221,6 +267,7 @@ async function loadModules() {
 
 function renderModules() {
   renderPageList();
+  renderFragSelect();
   renderModuleList();
   renderItemList();
   renderModuleEditor();
@@ -229,6 +276,19 @@ function renderModules() {
   mountEditor(curItem());
   // 图片选择器要用媒体库数据
   renderImagePicker(curItem());
+}
+
+/** 片段下拉 —— 插入片段引用 */
+function renderFragSelect() {
+  const sel = document.getElementById("modFragSel");
+  if (!sel) return;
+  const cur = sel.value;
+  const list = (typeof window !== "undefined" && window.geoFragments) || [];
+  sel.innerHTML = '<option value="">插片段…</option>' +
+    list.map((f) =>
+      '<option value="' + mEsc(f.id) + '">' + mEsc(f.name) + "（" +
+      (f.items ?? []).length + " 条）</option>").join("");
+  sel.value = cur;
 }
 
 // ── 外观设置（布局变体 / 质感 / 色板）────────────────────
@@ -333,18 +393,25 @@ function renderModuleList() {
     return;
   }
   el.innerHTML = mods.map((m) => {
-    const pub = (m.items ?? []).filter((i) => i.published).length;
+    // 引用片段的模块 —— 条目在片段里，列表要显示展开后的条目数
+    const rm = resolvedModule(m);
+    const pub = (rm.items ?? []).filter((i) => i.published).length;
+    const frag = m.fragmentId ? fragById(m.fragmentId) : null;
     return '<div class="mrow' + (m.id === curModuleId ? " sel" : "") + '" data-module="' + mEsc(m.id) + '">' +
-      '<div class="t">' + mEsc(m.title || MOD_TYPE_LABEL[m.type] || m.type) + "</div>" +
+      '<div class="t">' + mEsc(rm.title || MOD_TYPE_LABEL[rm.type] || rm.type) + "</div>" +
       '<div class="m">' +
-      '<span class="pill">' + mEsc(MOD_TYPE_LABEL[m.type] || m.type) + "</span>" +
+      '<span class="pill">' + mEsc(MOD_TYPE_LABEL[rm.type] || rm.type) + "</span>" +
+      (frag ? '<span class="pill">引用「' + mEsc(frag.name) + "」</span>" : "") +
       (m.enabled ? "" : '<span class="pill warn">已停用</span>') +
-      '<span class="pill">' + pub + "/" + (m.items ?? []).length + " 条</span>" +
+      '<span class="pill">' + pub + "/" + (rm.items ?? []).length + " 条</span>" +
       "</div>" +
       '<div class="m" style="margin-top:5px">' +
       '<button data-men="' + mEsc(m.id) + '">' + (m.enabled ? "停用" : "启用") + "</button>" +
       '<button data-mup="' + mEsc(m.id) + '">↑</button>' +
       '<button data-mdown="' + mEsc(m.id) + '">↓</button>' +
+      '<button data-msavefrag="' + mEsc(m.id) + '">存为片段</button>' +
+      (frag ? "" : '<button data-mfrag="' + mEsc(m.id) + '">转引用</button>') +
+      (frag ? '<button data-mdetach="' + mEsc(m.id) + '">脱离引用</button>' : "") +
       '<button data-mdel="' + mEsc(m.id) + '">删</button>' +
       "</div></div>";
   }).join("");
@@ -359,13 +426,21 @@ function renderItemList() {
     if (cnt) cnt.textContent = "";
     return;
   }
-  const items = (m.items ?? []).slice().sort((a, b) => a.order - b.order);
+  // 引用片段的模块 —— 条目来自片段，按展开后的显示
+  const rm = resolvedModule(m);
+  const isRef = !!m.fragmentId;
+  const items = (rm.items ?? []).slice().sort((a, b) => a.order - b.order);
   if (cnt) cnt.textContent = items.filter((i) => i.published).length + " 已发布 / " + items.length + " 条";
 
-  const kind = String(m.props?.kind ?? "");
+  const head = isRef
+    ? '<div class="mgroup"><h3>来自片段</h3>' +
+      '<div class="hint">这些条目在片段「' + mEsc((fragById(m.fragmentId) || {}).name ?? "?") +
+      "」里。改这里的内容会写成**局部覆盖**，片段本体不变。</div></div>"
+    : '<div class="mgroup"><h3>从知识库添加</h3>' +
+      '<div class="hint">点知识库条目右侧的「加入模块」按钮</div></div>';
+
   el.innerHTML =
-    '<div class="mgroup"><h3>从知识库添加</h3>' +
-    '<div class="hint">点知识库条目右侧的「加入模块」按钮</div></div>' +
+    head +
     (items.length
       ? items.map((i) => {
           const kb = i.source === "kb" ? kbItems.find((x) => x.id === i.kbItemId) : null;
@@ -376,22 +451,25 @@ function renderItemList() {
             sched = '<span class="pill ' + (due ? "ok" : "warn") + '">' +
               (due ? "已定时" : "待发布") + "</span>";
           }
+          // 引用模块的条目不能删（删了就是删片段里的条目）
+          const actions = isRef
+            ? '<button data-iedit="' + mEsc(i.id) + '">改这一处</button>'
+            : '<button data-ipub="' + mEsc(i.id) + '">' + (i.published ? "转草稿" : "定稿") + "</button>" +
+              '<button data-iup="' + mEsc(i.id) + '">↑</button>' +
+              '<button data-idown="' + mEsc(i.id) + '">↓</button>' +
+              '<button data-idel="' + mEsc(i.id) + '">删</button>';
           return '<div class="mrow' + (i.id === curItemId ? " sel" : "") + '" data-item="' + mEsc(i.id) + '">' +
             '<div class="t">' + (i.sticky ? "📌 " : "") + mEsc(title) + "</div>" +
             '<div class="m">' +
             (i.source === "kb"
               ? '<span class="pill ok">知识库</span>'
               : '<span class="pill">手工</span>') +
+            (isRef ? '<span class="pill">片段</span>' : "") +
             (i.published ? '<span class="pill ok">发布</span>' : '<span class="pill warn">草稿</span>') +
             sched +
             '<span class="pill">序 ' + i.order + "</span>" +
             "</div>" +
-            '<div class="m" style="margin-top:5px">' +
-            '<button data-ipub="' + mEsc(i.id) + '">' + (i.published ? "转草稿" : "定稿") + "</button>" +
-            '<button data-iup="' + mEsc(i.id) + '">↑</button>' +
-            '<button data-idown="' + mEsc(i.id) + '">↓</button>' +
-            '<button data-idel="' + mEsc(i.id) + '">删</button>' +
-            "</div></div>";
+            '<div class="m" style="margin-top:5px">' + actions + "</div></div>";
         }).join("")
       : '<div class="empty">这个模块还没有条目</div>');
 }
@@ -403,10 +481,57 @@ function renderModuleEditor() {
   const page = curPage();
   const mod = curModule();
 
-  if (item) { el.innerHTML = itemEditorHtml(item, mod); return; }
+  if (item) {
+    // 引用片段的条目 —— 编辑的是**局部覆盖**，不是片段本体
+    if (mod?.fragmentId) {
+      el.innerHTML = fragItemEditorHtml(item, mod, fragById(mod.fragmentId));
+      return;
+    }
+    el.innerHTML = itemEditorHtml(item, mod);
+    return;
+  }
   if (mod) { el.innerHTML = moduleEditorHtml(mod, page); return; }
   if (page) { el.innerHTML = pageEditorHtml(page); return; }
   el.innerHTML = '<div class="empty">左边选一个页面 / 模块 / 条目</div>';
+}
+
+/**
+ * 片段条目的编辑区 —— 只能改「这一处」的覆盖。
+ *
+ * 为什么不能直接改正文：
+ *   改了就是改片段本体 —— 首页和「关于我们」页会一起变，
+ *   这与「局部覆盖」的语义相反。
+ *   所以这里只开放少量文案字段；要改正文请改片段。
+ */
+function fragItemEditorHtml(i, m, frag) {
+  const ov = (m.overrides?.items ?? []).find((x) => x.itemId === i.id);
+  const isFaq = frag?.type === "faq";
+
+  let h = '<div class="mform">' +
+    '<div class="mgroup"><h3>片段条目</h3>' +
+    '<div class="hint">来自片段「' + mEsc(frag?.name ?? "?") + "」<br/>" +
+    "这里改的是**这一处的覆盖**，片段本体不变 —— " +
+    "别的页面引用同一片段时不受影响。</div></div>";
+
+  if (isFaq) {
+    h += '<div><label>问题（覆盖）</label>' +
+      '<input id="me-item-question" value="' + mEsc(ov?.question ?? "") + '" /></div>' +
+      '<div><label>答案（覆盖）</label><textarea id="me-item-answer" rows="4">' +
+      mEsc(ov?.answer ?? "") + "</textarea></div>";
+  } else {
+    h += '<div><label>标题（覆盖）</label>' +
+      '<input id="me-item-title" value="' + mEsc(ov?.title ?? "") + '" /></div>' +
+      '<div><label>摘要（覆盖）</label><textarea id="me-item-summary" rows="2">' +
+      mEsc(ov?.summary ?? "") + "</textarea></div>";
+  }
+
+  h += '<div class="hint">片段里的原值：' +
+    mEsc(isFaq ? (i.question ?? "") : (i.title ?? "")) + "</div>" +
+    '<div class="actions">' +
+    '<button id="me-item-save" class="primary">保存覆盖</button>' +
+    '<button id="me-item-reset">恢复片段内容</button>' +
+    "</div></div>";
+  return h;
 }
 
 function pageEditorHtml(p) {
@@ -441,21 +566,39 @@ function pageEditorHtml(p) {
 
 function moduleEditorHtml(m, page) {
   const kind = String(m.props?.kind ?? "");
+  const isRef = !!m.fragmentId;
+  const rm = resolvedModule(m);
+  const frag = isRef ? fragById(m.fragmentId) : null;
+
   let h = '<div class="mform">' +
-    '<div><label>模块标题</label><input id="me-mod-title" value="' + mEsc(m.title ?? "") + '" /></div>' +
-    '<div><label>副标题</label><input id="me-mod-sub" value="' + mEsc(m.subtitle ?? "") + '" /></div>' +
+    (isRef
+      ? '<div class="mgroup"><h3>片段引用</h3>' +
+        '<div class="hint">内容在片段「' + mEsc(frag?.name ?? m.fragmentId) + "」里 —— " +
+        "改下面的标题/副标题是**这一处**的覆盖，片段本体不变。<br/>" +
+        "要让这一处独立于片段，点「脱离引用」。</div>" +
+        '<div class="actions"><button id="me-mod-detach">脱离引用</button>' +
+        '<button id="me-mod-openfrag">打开片段</button></div></div>'
+      : "") +
+    '<div><label>模块标题</label><input id="me-mod-title" value="' +
+      mEsc(rm.title ?? "") + '" /></div>' +
+    '<div><label>副标题</label><input id="me-mod-sub" value="' +
+      mEsc(rm.subtitle ?? "") + '" /></div>' +
     '<div class="row2">' +
-    '<div><label>模块类型</label><select id="me-mod-type">' +
+    '<div><label>模块类型</label><select id="me-mod-type"' +
+      (isRef ? " disabled" : "") + ">" +
     Object.entries(MOD_TYPE_LABEL).map(([k, v]) =>
-      '<option value="' + k + '"' + (m.type === k ? " selected" : "") + ">" + v + "</option>").join("") +
-    "</select></div>" +
-    '<div><label>卡片类型（card-grid 用）</label><select id="me-mod-kind">' +
+      '<option value="' + k + '"' + (rm.type === k ? " selected" : "") + ">" + v + "</option>").join("") +
+    "</select>" +
+    (isRef ? '<div class="hint">类型由片段决定</div>' : "") + "</div>" +
+    '<div><label>卡片类型（card-grid 用）</label><select id="me-mod-kind"' +
+      (isRef ? " disabled" : "") + ">" +
     Object.entries(CARD_KIND_LABEL).map(([k, v]) =>
       '<option value="' + k + '"' + (kind === k ? " selected" : "") + ">" + v + "</option>").join("") +
     "</select></div></div>";
 
   // 表单模块：字段定义在模块 props 里 —— 一行一个字段
-  if (m.type === "form") {
+  // 引用片段的模块不显示字段编辑 —— props 归片段管
+  if (rm.type === "form" && !isRef) {
     const fields = m.props?.fields ?? [];
     const lines = fields.map((f) =>
       [f.name, f.label, f.type ?? "text", f.required ? "必填" : "选填",
@@ -708,7 +851,7 @@ function bindModulePanel() {
   });
 
   // 模块列表
-  on("modModuleList", "click", (e) => {
+  on("modModuleList", "click", async (e) => {
     const t = e.target;
     const row = t.closest("[data-module]");
     if (row && !t.closest("button")) {
@@ -720,8 +863,21 @@ function bindModulePanel() {
     if (!b) return;
     const page = curPage();
     if (!page) return;
-    const m = page.modules.find((x) => x.id === (b.dataset.men || b.dataset.mup || b.dataset.mdown || b.dataset.mdel));
+    const m = page.modules.find((x) => x.id === (b.dataset.men || b.dataset.mup || b.dataset.mdown ||
+      b.dataset.mdel || b.dataset.msavefrag || b.dataset.mdetach || b.dataset.mfrag));
     if (!m) return;
+    if (b.dataset.msavefrag) {
+      await saveModuleAsFragment(m);
+      return;
+    }
+    if (b.dataset.mfrag) {
+      await turnModuleIntoFragment(m);
+      return;
+    }
+    if (b.dataset.mdetach) {
+      detachModule(m);
+      return;
+    }
     if (b.dataset.men) { m.enabled = !m.enabled; renderModules(); return; }
     if (b.dataset.mup || b.dataset.mdown) {
       const dir = b.dataset.mup ? -1 : 1;
@@ -753,6 +909,118 @@ function bindModulePanel() {
     renderModules();
   });
 
+  // ── 插入片段引用 ────────────────────────────────────
+  //
+  // 插进来的模块**不含内容** —— 内容在片段里。
+  // 片段改了，所有引用点跟着改（这才是复用的意义）。
+  on("modAddFragment", "click", () => {
+    const sel = document.getElementById("modFragSel");
+    const fid = sel?.value;
+    if (!fid) { toast("先选一个片段", true); return; }
+    insertFragmentModule(fid);
+  });
+
+  /** 把一个片段作为引用插到当前页面末尾 */
+  function insertFragmentModule(fid) {
+    const page = curPage();
+    if (!page) { toast("先选一个页面", true); return; }
+    const frag = fragById(fid);
+    if (!frag) { toast("片段不存在", true); return; }
+    const order = page.modules.length ? Math.max(...page.modules.map((m) => m.order)) + 1 : 0;
+    const m = {
+      id: mUid("mod"), type: frag.type, items: [], order, enabled: true,
+      fragmentId: fid,
+    };
+    page.modules.push(m);
+    curModuleId = m.id; curItemId = null;
+    renderModules();
+    toast("已插入片段「" + frag.name + "」—— 内容跟着片段走");
+  }
+
+  /**
+   * 把模块存为片段。
+   *
+   * 片段是**内容的副本** —— 模块本身不动。
+   * 想改成引用的话用「转引用」（下面另一个入口）。
+   */
+  async function saveModuleAsFragment(m) {
+    const rm = resolvedModule(m);
+    const name = prompt("片段名：", rm.title || MOD_TYPE_LABEL[rm.type] || "未命名片段");
+    if (name === null) return;
+    const desc = prompt("这个片段用在哪？（可留空）", "") ?? "";
+    const r = await fetch(
+      "/api/sites/" + encodeURIComponent(siteId) + "/fragments",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          description: desc.trim(),
+          module: {
+            type: rm.type, title: rm.title, subtitle: rm.subtitle,
+            items: rm.items ?? [], props: rm.props,
+          },
+        }),
+      },
+    );
+    const d = await r.json();
+    if (d.error) { toast(d.error, true); return; }
+    await loadFragments();
+    toast("已存为片段「" + d.fragment.name + "」");
+  }
+
+  /** 把模块转成片段引用 —— 内容归片段管，这里只留引用 */
+  async function turnModuleIntoFragment(m) {
+    const rm = resolvedModule(m);
+    const name = prompt("片段名：", rm.title || MOD_TYPE_LABEL[rm.type] || "未命名片段");
+    if (name === null) return;
+    const r = await fetch(
+      "/api/sites/" + encodeURIComponent(siteId) + "/fragments",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          module: {
+            type: rm.type, title: rm.title, subtitle: rm.subtitle,
+            items: rm.items ?? [], props: rm.props,
+          },
+        }),
+      },
+    );
+    const d = await r.json();
+    if (d.error) { toast(d.error, true); return; }
+    m.fragmentId = d.fragment.id;
+    m.items = [];
+    delete m.overrides;
+    await loadFragments();
+    renderModules();
+    toast("已转为引用片段「" + d.fragment.name + "」");
+  }
+
+  /**
+   * 脱离引用 —— 把片段内容拷成这一处自己的内容。
+   *
+   * 拷一份而不是共享：脱离之后这一处就该与片段无关。
+   */
+  function detachModule(m) {
+    const frag = fragById(m.fragmentId);
+    if (!frag) {
+      toast("片段已不存在 —— 请删掉这个模块", true);
+      return;
+    }
+    const rm = resolvedModule(m);
+    m.items = rm.items ?? [];
+    m.type = rm.type;
+    m.title = rm.title;
+    m.subtitle = rm.subtitle;
+    m.props = rm.props;
+    delete m.fragmentId;
+    delete m.overrides;
+    renderModules();
+    toast("已脱离引用 —— 这一处的内容现在是自己的");
+  }
+
   // 条目列表
   on("modItemList", "click", (e) => {
     const t = e.target;
@@ -766,6 +1034,12 @@ function bindModulePanel() {
     if (!b) return;
     const mod = curModule();
     if (!mod) return;
+    // 片段条目：只有「改这一处」
+    if (b.dataset.iedit) {
+      curItemId = b.dataset.iedit;
+      renderModules();
+      return;
+    }
     const i = mod.items.find((x) => x.id === (b.dataset.ipub || b.dataset.iup || b.dataset.idown || b.dataset.idel));
     if (!i) return;
     if (b.dataset.ipub) { i.published = !i.published; renderModules(); return; }
@@ -820,39 +1094,82 @@ function bindModulePanel() {
     }
     if (t.id === "me-mod-save") {
       const m = curModule(); if (!m) return;
-      m.title = document.getElementById("me-mod-title").value;
-      m.subtitle = document.getElementById("me-mod-sub").value;
-      m.type = document.getElementById("me-mod-type").value;
-      m.props = { ...(m.props ?? {}), kind: document.getElementById("me-mod-kind").value };
-      // 表单字段（一行一个：名称,标签,类型,必填/选填,选项|分隔,占位提示）
-      const fieldsInput = document.getElementById("me-mod-fields");
-      if (fieldsInput) {
-        const fields = fieldsInput.value.split("\\n")
-          .map((line) => line.trim()).filter(Boolean)
-          .map((line) => {
-            const p = line.split(",").map((x) => x.trim());
-            const opts = (p[4] ?? "").split("|").map((x) => x.trim()).filter(Boolean);
-            const f = {
-              name: p[0] ?? "",
-              label: p[1] ?? "",
-              type: p[2] || "text",
-              required: (p[3] ?? "") === "必填",
-              placeholder: p[5] ?? "",
-            };
-            if (opts.length) f.options = opts;
-            return f;
-          })
-          .filter((f) => f.name);
-        m.props.fields = fields;
+      const titleVal = document.getElementById("me-mod-title").value;
+      const subVal = document.getElementById("me-mod-sub").value;
+      if (m.fragmentId) {
+        // 引用片段的模块 —— 改的是**这一处的覆盖**，不是片段本体
+        m.overrides = m.overrides ?? {};
+        if (titleVal.trim()) m.overrides.title = titleVal; else delete m.overrides.title;
+        if (subVal.trim()) m.overrides.subtitle = subVal; else delete m.overrides.subtitle;
+        m.title = undefined;
+        m.subtitle = undefined;
+      } else {
+        m.title = titleVal;
+        m.subtitle = subVal;
+        m.type = document.getElementById("me-mod-type").value;
+        m.props = { ...(m.props ?? {}), kind: document.getElementById("me-mod-kind").value };
+        // 表单字段（一行一个：名称,标签,类型,必填/选填,选项|分隔,占位提示）
+        const fieldsInput = document.getElementById("me-mod-fields");
+        if (fieldsInput) {
+          const fields = fieldsInput.value.split("\\n")
+            .map((line) => line.trim()).filter(Boolean)
+            .map((line) => {
+              const p = line.split(",").map((x) => x.trim());
+              const opts = (p[4] ?? "").split("|").map((x) => x.trim()).filter(Boolean);
+              const f = {
+                name: p[0] ?? "",
+                label: p[1] ?? "",
+                type: p[2] || "text",
+                required: (p[3] ?? "") === "必填",
+                placeholder: p[5] ?? "",
+              };
+              if (opts.length) f.options = opts;
+              return f;
+            })
+            .filter((f) => f.name);
+          m.props.fields = fields;
+        }
       }
       m.order = Number(document.getElementById("me-mod-order").value) || 0;
       m.enabled = document.getElementById("me-mod-enabled").value === "1";
       renderModules();
       return;
     }
+    if (t.id === "me-mod-detach") {
+      const m = curModule(); if (!m) return;
+      detachModule(m);
+      return;
+    }
+    if (t.id === "me-mod-openfrag") {
+      const m = curModule(); if (!m?.fragmentId) return;
+      const frag = fragById(m.fragmentId);
+      toast(frag ? "片段「" + frag.name + "」在「片段」标签页里" : "片段不存在", !frag);
+      return;
+    }
     if (t.id === "me-item-save") {
       const i = curItem(); if (!i) return;
       const mod = curModule();
+      if (mod?.fragmentId) {
+        // 片段条目 —— 保存成**局部覆盖**
+        const frag = fragById(mod.fragmentId);
+        const isFaq = frag?.type === "faq";
+        const patch = { itemId: i.id };
+        if (isFaq) {
+          patch.question = document.getElementById("me-item-question").value;
+          patch.answer = document.getElementById("me-item-answer").value;
+        } else {
+          patch.title = document.getElementById("me-item-title").value;
+          patch.summary = document.getElementById("me-item-summary").value;
+        }
+        const ovs = (mod.overrides?.items ?? []).slice();
+        const idx = ovs.findIndex((x) => x.itemId === i.id);
+        if (idx >= 0) ovs[idx] = { ...ovs[idx], ...patch };
+        else ovs.push(patch);
+        mod.overrides = { ...(mod.overrides ?? {}), items: ovs };
+        renderModules();
+        toast("已保存覆盖 —— 片段本体没动");
+        return;
+      }
       if (mod?.type === "faq") {
         i.question = document.getElementById("me-item-question").value;
         i.answer = document.getElementById("me-item-answer").value;
@@ -891,6 +1208,17 @@ function bindModulePanel() {
       const at = document.getElementById("me-item-publish-at");
       if (at) i.publishAt = at.value ? new Date(at.value).toISOString() : undefined;
       renderModules();
+      return;
+    }
+    if (t.id === "me-item-reset") {
+      // 恢复片段内容 —— 删掉这一处的覆盖
+      const mod = curModule();
+      const i = curItem();
+      if (!mod?.fragmentId || !i) return;
+      const ovs = (mod.overrides?.items ?? []).filter((x) => x.itemId !== i.id);
+      mod.overrides = { ...(mod.overrides ?? {}), items: ovs };
+      renderModules();
+      toast("已恢复片段内容");
       return;
     }
     if (t.id === "me-item-sticky") {
@@ -1026,9 +1354,22 @@ function bindModulePanel() {
     toast("已加入模块 —— 在右栏定稿");
   };
 
+  // 片段面板的「插入到当前页」委托到这里 ——
+  // 编排树只有这边有，片段面板拿不到。
+  window.__modInsertFragment = function (fragmentId) {
+    insertFragmentModule(fragmentId);
+  };
+
+  // 脱离引用（片段面板也能触发）
+  window.__modDetachFragment = function (moduleId) {
+    const page = curPage();
+    const m = page?.modules.find((x) => x.id === moduleId);
+    if (!m) { toast("先选中那个模块", true); return; }
+    detachModule(m);
+  };
+
   // 手工新建条目
-  window.__modAddManualItem = function () {
-    const mod = curModule();
+  window.__modAddManualItem = function () {    const mod = curModule();
     if (!mod) { toast("先选一个模块", true); return; }
     const order = mod.items.length ? Math.max(...mod.items.map((i) => i.order)) + 1 : 0;
     const it = {

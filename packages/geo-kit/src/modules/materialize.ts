@@ -16,6 +16,7 @@ import type { KnowledgeItem } from "../sync/knowledge-sync.js";
 import { structureContent } from "../sync/knowledge-sync.js";
 import { docToParagraphs, readingMinutes } from "../rich-text/convert.js";
 import type { RichTextDoc, RichTextNode } from "../rich-text/types.js";
+import { resolveFragmentModule, type FragmentMap } from "../fragments/apply.js";
 import type {
   ContentItem,
   ContentModule,
@@ -171,13 +172,23 @@ export function compareForDisplay<T extends { order: number; sticky?: boolean }>
   return a.order - b.order;
 }
 
-/** 物化一个模块 */
+/**
+ * 物化一个模块。
+ *
+ * 引用片段的模块在这里**展开** —— 展开后就是普通模块，
+ * 渲染层看不出差别（所以骨架模板不用改）。
+ */
 export function materializeModule(
   module: PageModule,
   items: Map<string, KnowledgeItem>,
   now: Date = new Date(),
+  fragments?: FragmentMap,
 ): MaterializedModule {
-  const sorted = [...(module.items ?? [])].sort(compareForDisplay);
+  const resolved = module.fragmentId
+    ? resolveFragmentModule(module, fragments?.get(module.fragmentId))
+    : module;
+
+  const sorted = [...(resolved.items ?? [])].sort(compareForDisplay);
   const materialized: MaterializedItem[] = [];
 
   for (const item of sorted) {
@@ -190,10 +201,10 @@ export function materializeModule(
 
   return {
     id: module.id,
-    type: module.type,
-    title: module.title,
-    subtitle: module.subtitle,
-    props: module.props,
+    type: resolved.type,
+    title: resolved.title,
+    subtitle: resolved.subtitle,
+    props: resolved.props,
     items: materialized,
   };
 }
@@ -203,6 +214,7 @@ export function materializePage(
   page: PageDef,
   items: Map<string, KnowledgeItem>,
   now: Date = new Date(),
+  fragments?: FragmentMap,
 ): MaterializedPage {
   const sorted = [...(page.modules ?? [])].sort(compareForDisplay);
   const modules: MaterializedModule[] = [];
@@ -211,7 +223,7 @@ export function materializePage(
     if (!module.enabled) continue;
     // 模块自身的定时发布
     if (!isPublishDue(module.publishAt, now)) continue;
-    modules.push(materializeModule(module, items, now));
+    modules.push(materializeModule(module, items, now, fragments));
   }
 
   return {
@@ -227,6 +239,7 @@ export function materializePage(
 export function materializeModulePlan(
   plan: ModulePlan,
   items: Map<string, KnowledgeItem>,
+  fragments?: FragmentMap,
 ): {
   pages: MaterializedPage[];
   skipped: Array<{ pageId: string; moduleId: string; itemId: string; reason: string }>;
@@ -244,7 +257,12 @@ export function materializeModulePlan(
     if (!page.published) continue;
 
     // 先检查有没有条目会掉（知识库已删）
-    for (const module of page.modules ?? []) {
+    // 引用片段的模块要按**展开后**的条目查 ——
+    // 片段里的条目同样可能引用了已被删除的知识条目。
+    for (const raw of page.modules ?? []) {
+      const module = raw.fragmentId
+        ? resolveFragmentModule(raw, fragments?.get(raw.fragmentId))
+        : raw;
       for (const item of module.items ?? []) {
         if (item.source === "kb" && item.kbItemId && !items.has(item.kbItemId)) {
           skipped.push({
@@ -257,7 +275,7 @@ export function materializeModulePlan(
       }
     }
 
-    pages.push(materializePage(page, items));
+    pages.push(materializePage(page, items, new Date(), fragments));
   }
 
   return { pages, skipped };

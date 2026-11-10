@@ -155,6 +155,58 @@ export interface FormFieldDef {
   placeholder?: string;
 }
 
+/**
+ * 片段引用的**条目级覆盖**。
+ *
+ * 为什么条目也要能覆盖：
+ *   同一个「公司简介」片段，放在首页可以完整放，
+ *   放在「关于我们」页可能只想留两段 —— 但**不能复制一份片段**，
+ *   复制之后两边各改各的，片段就废了。
+ *   覆盖是「这一处例外」，改的是引用点，不是片段本体。
+ */
+export interface FragmentItemOverride {
+  /** 片段内的条目 id */
+  itemId: string;
+  title?: string;
+  summary?: string;
+  body?: RichTextDoc;
+  image?: string;
+  question?: string;
+  answer?: string;
+  value?: string;
+  unit?: string;
+  label?: string;
+  href?: string;
+  client?: string;
+  results?: string[];
+  specs?: Array<{ name: string; value: string; unit?: string }>;
+  alt?: string;
+  caption?: string;
+  step?: number;
+  /** 是否发布 —— 默认沿用片段里的 */
+  published?: boolean;
+  /** 这一处不要这条（隐藏） */
+  hidden?: boolean;
+}
+
+/**
+ * 片段引用的**模块级覆盖**。
+ *
+ * 覆盖的是「引用点」而不是片段本体 —— 片段改了，所有引用点跟着改，
+ * 只有明确写了覆盖的字段不动。这是「一份内容多处复用」的关键：
+ * 复用不等于锁死。
+ */
+export interface FragmentOverrides {
+  /** 覆盖片段的标题 */
+  title?: string;
+  /** 覆盖片段的副标题 */
+  subtitle?: string;
+  /** 覆盖片段的 props（浅合并） */
+  props?: Record<string, unknown>;
+  /** 条目级覆盖 */
+  items?: FragmentItemOverride[];
+}
+
 /** 模块 —— 页面上的一个区块 */
 export interface PageModule {
   /** 页面内唯一 id */
@@ -177,6 +229,21 @@ export interface PageModule {
   publishAt?: string;
   /** 置顶 —— 同页面里排最前 */
   sticky?: boolean;
+  /**
+   * 引用的片段 id。
+   *
+   * 存在时，本模块是**片段的引用**而不是内容本体：
+   *   - `items` 不保存内容 —— 内容在片段里（见 fragments/）
+   *   - `overrides` 保存这一处的局部覆盖
+   *   - 物化时展开成普通模块，渲染层看不出差别
+   *
+   * 为什么不在模块里直接存内容：
+   *   同一段「公司简介」要出现在多个页面 —— 复制三份的话，
+   *   客户改了电话要改三处，改漏一处就是线上不一致的联系方式。
+   */
+  fragmentId?: string;
+  /** 片段引用的局部覆盖 */
+  overrides?: FragmentOverrides;
 }
 
 /** 页面 —— 一组模块 */

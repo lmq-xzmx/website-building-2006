@@ -8,6 +8,8 @@
 
 import type { KnowledgeItem } from "../sync/knowledge-sync.js";
 import { isDocEmpty } from "../rich-text/types.js";
+import { resolveFragmentModule, type FragmentMap } from "../fragments/apply.js";
+import type { Fragment } from "../fragments/types.js";
 import type { FormFieldDef, ModuleItem, ModulePlan, PageDef, PageModule } from "./types.js";
 
 export interface ValidationProblem {
@@ -201,10 +203,84 @@ function validateFormModule(module: PageModule, page: PageDef): ValidationProble
   return out;
 }
 
-/** 校验整个编排 */
+/**
+ * 校验片段本体。
+ *
+ * 片段的条目按**现有模块类型的规则**校验 —— 片段就是模块，
+ * 「公司简介」片段里的段落跟页面上的模块段落没有区别。
+ * 差别只有一条：片段必须**有内容** —— 空片段引用出去就是空区块。
+ */
+export function validateFragment(
+  fragment: Fragment,
+  items: Map<string, KnowledgeItem>,
+): ValidationProblem[] {
+  const out: ValidationProblem[] = [];
+  const pseudo: PageModule = {
+    id: fragment.id,
+    type: fragment.type,
+    title: fragment.name,
+    props: fragment.props,
+    items: fragment.items ?? [],
+    order: 0,
+    enabled: true,
+  };
+  const fakePage: PageDef = {
+    id: "",
+    path: "",
+    title: fragment.name,
+    modules: [],
+    order: 0,
+    published: false,
+  };
+
+  if (!fragment.name?.trim()) {
+    out.push({
+      pageId: "",
+      pageTitle: "",
+      moduleId: fragment.id,
+      moduleTitle: fragment.id,
+      itemId: "",
+      itemTitle: fragment.id,
+      message: "片段没有名字 —— 列表里分不清谁是谁",
+      level: "error",
+    });
+  }
+
+  if (!fragment.items?.length) {
+    out.push({
+      pageId: "",
+      pageTitle: "",
+      moduleId: fragment.id,
+      moduleTitle: fragment.name,
+      itemId: "",
+      itemTitle: fragment.name,
+      message: "片段没有条目 —— 引用它的页面会渲染出一个空区块",
+      level: "error",
+    });
+  }
+
+  if (fragment.type === "form") {
+    out.push(...validateFormModule(pseudo, fakePage));
+  }
+
+  for (const item of fragment.items ?? []) {
+    if (!item.published) continue;
+    for (const p of validateItem(item, pseudo, items)) out.push(p);
+  }
+
+  return out;
+}
+
+/**
+ * 校验整个编排。
+ *
+ * fragments 传入时，引用片段的模块按**展开后的内容**校验 ——
+ * 片段里的条目同样要满足类型规则，引用一个坏片段不能蒙混过关。
+ */
 export function validateModulePlan(
   plan: ModulePlan,
   items: Map<string, KnowledgeItem>,
+  fragments?: FragmentMap,
 ): ValidationProblem[] {
   const out: ValidationProblem[] = [];
   const seenPaths = new Set<string>();
@@ -270,7 +346,27 @@ export function validateModulePlan(
       }
     }
 
-    for (const module of page.modules ?? []) {
+    for (const raw of page.modules ?? []) {
+      // 引用片段的模块：内容在片段里 —— 校验展开后的内容
+      let module = raw;
+      if (raw.fragmentId) {
+        const fragment = fragments?.get(raw.fragmentId);
+        if (!fragment) {
+          out.push({
+            pageId: page.id,
+            pageTitle: page.title,
+            moduleId: raw.id,
+            moduleTitle: raw.title ?? raw.type,
+            itemId: "",
+            itemTitle: raw.title ?? raw.type,
+            message: "引用的片段不存在（可能已被删除）—— 请改成自有内容或换一个片段",
+            level: "error",
+          });
+          continue;
+        }
+        module = resolveFragmentModule(raw, fragment);
+      }
+
       // 表单的字段定义是**模块级**的 —— 必填项数量直接决定转化摩擦，
       // 所以在模块这一层校验，不摊到条目上。
       if (module.type === "form") {
@@ -308,7 +404,10 @@ export function isValidPath(path: string): boolean {
 }
 
 /** 汇总统计 —— 后台顶部的数字 */
-export function modulePlanStats(plan: ModulePlan) {
+export function modulePlanStats(
+  plan: ModulePlan,
+  fragments?: FragmentMap,
+) {
   let pages = 0;
   let modules = 0;
   let items = 0;
@@ -320,8 +419,13 @@ export function modulePlanStats(plan: ModulePlan) {
   for (const page of plan.pages) {
     if (!page.published) continue;
     pages++;
-    for (const module of page.modules) {
-      if (!module.enabled) continue;
+    for (const raw of page.modules) {
+      if (!raw.enabled) continue;
+      // 引用片段的模块要按**展开后**的条目算 ——
+      // 否则统计会显示「0 条」，后台看着像模块是空的。
+      const module = raw.fragmentId
+        ? resolveFragmentModule(raw, fragments?.get(raw.fragmentId))
+        : raw;
       modules++;
       const t = (byType[module.type] ??= { total: 0, published: 0 });
       t.total++;

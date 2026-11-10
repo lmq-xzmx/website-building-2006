@@ -42,6 +42,7 @@ for (const block of scriptBlocks) {
 // 页面里被调用但从未定义的 window.xxx / 裸函数
 const requiredGlobals = [
   "__rte", "__rteHtml", "__modAddKbItem", "__modAddManualItem",
+  "__modInsertFragment", "__modDetachFragment",
 ];
 for (const name of requiredGlobals) {
   const defined = new RegExp(`window\\.${name}\\s*=`).test(html);
@@ -52,8 +53,11 @@ for (const name of requiredGlobals) {
 const ids = [
   "site", "kb", "q", "reload", "save", "publish", "who",
   "tabPlan", "tabModule", "tabWechat", "tabMedia", "modulePane", "wechatPane", "mediaPane",
+  "tabFragments", "fragmentsPane", "fragList", "fragDetail", "fragReload",
+  "tabHistory", "historyPane", "verList", "verDetail", "verReload",
+  "verDiff", "verRollback",
   "modAddPage", "modPageList",
-  "modAddModule", "modModuleList",
+  "modAddModule", "modModuleList", "modFragSel", "modAddFragment",
   "modAddManual", "modItemList", "modItemCount",
   "modEditor", "modSave", "modPublish", "modLook",
   "kbList", "kbCount", "planList", "planCount", "checkPane",

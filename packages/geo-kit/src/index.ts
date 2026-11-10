@@ -304,6 +304,8 @@ export type {
   ModuleType,
   ItemSource,
   FormFieldDef,
+  FragmentOverrides,
+  FragmentItemOverride,
 } from "./modules/types.js";
 
 export {
@@ -316,6 +318,7 @@ export {
 
 export {
   validateModulePlan,
+  validateFragment,
   modulePlanStats,
   normalizePath,
   isValidPath,
@@ -379,3 +382,72 @@ export {
   MEDIA_FILENAME,
   MEDIA_DIR,
 } from "./media/store.js";
+
+// ── 可复用片段（片段 = 可复用的模块）──────────────────────
+
+export type {
+  Fragment,
+  FragmentLibrary,
+} from "./fragments/types.js";
+
+export {
+  emptyFragmentLibrary,
+  newFragmentId,
+  fragmentItemCount,
+} from "./fragments/types.js";
+
+export {
+  readFragmentLibrary,
+  writeFragmentLibrary,
+  fragmentsPath,
+  FRAGMENTS_FILENAME,
+} from "./fragments/store.js";
+
+export {
+  resolveFragmentModule,
+  expandFragmentPlan,
+  moduleToFragment,
+  detachFragmentModule,
+  fragmentToModule,
+  fragmentUsage,
+  type FragmentMap,
+} from "./fragments/apply.js";
+
+// ── 版本历史（快照 / 对比 / 回滚）──────────────────────────
+
+export type {
+  VersionEntry,
+  VersionIndex,
+  VersionStats,
+} from "./history/types.js";
+
+export {
+  emptyVersionIndex,
+  DEFAULT_KEEP_VERSIONS,
+} from "./history/types.js";
+
+export {
+  readVersionIndex,
+  writeVersionIndex,
+  readVersionPlan,
+  snapshotPlan,
+  rollbackToVersion,
+  planStatsForVersion,
+  formatVersionId,
+  parseVersionId,
+  nextVersionId,
+  historyDir,
+  historyIndexPath,
+  versionPath,
+  HISTORY_DIRNAME,
+  HISTORY_INDEX_FILENAME,
+} from "./history/store.js";
+
+export {
+  diffPlans,
+  renderPlanDiff,
+  type PlanDiff,
+  type DiffEntry,
+  type DiffKind,
+  type DiffScope,
+} from "./history/diff.js";

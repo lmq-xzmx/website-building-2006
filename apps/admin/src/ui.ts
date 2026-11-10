@@ -26,6 +26,16 @@ import {
   MEDIA_PANEL_HTML,
   MEDIA_PANEL_SCRIPT,
 } from "./media-ui.ts";
+import {
+  FRAGMENTS_PANEL_CSS,
+  FRAGMENTS_PANEL_HTML,
+  FRAGMENTS_PANEL_SCRIPT,
+} from "./fragments-ui.ts";
+import {
+  HISTORY_PANEL_CSS,
+  HISTORY_PANEL_HTML,
+  HISTORY_PANEL_SCRIPT,
+} from "./history-ui.ts";
 
 export async function renderPage(user?: {
   displayName?: string;
@@ -121,6 +131,8 @@ export async function renderPage(user?: {
   ${MODULE_PANEL_CSS}
   ${WECHAT_PANEL_CSS}
   ${MEDIA_PANEL_CSS}
+  ${FRAGMENTS_PANEL_CSS}
+  ${HISTORY_PANEL_CSS}
 </style>
 </head>
 <body>
@@ -131,6 +143,8 @@ export async function renderPage(user?: {
     <button id="tabModule" class="tab">模块</button>
     <button id="tabWechat" class="tab">公众号</button>
     <button id="tabMedia" class="tab">媒体</button>
+    <button id="tabFragments" class="tab">片段</button>
+    <button id="tabHistory" class="tab">版本</button>
   </div>
   <label>站点 <select id="site"></select></label>
   <label>知识库 <select id="kb"></select></label>
@@ -164,6 +178,10 @@ ${MODULE_PANEL_HTML}
 ${WECHAT_PANEL_HTML}
 
 ${MEDIA_PANEL_HTML}
+
+${FRAGMENTS_PANEL_HTML}
+
+${HISTORY_PANEL_HTML}
 
 <div class="toast" id="toast"></div>
 
@@ -470,6 +488,10 @@ ${WECHAT_PANEL_SCRIPT}
 
 ${MEDIA_PANEL_SCRIPT}
 
+${FRAGMENTS_PANEL_SCRIPT}
+
+${HISTORY_PANEL_SCRIPT}
+
 <script>
 // ── 视图切换 ────────────────────────────────────────────
 let currentView = "plan";
@@ -480,16 +502,26 @@ function switchView(v) {
   document.getElementById("modulePane").hidden = v !== "module";
   document.getElementById("wechatPane").hidden = v !== "wechat";
   document.getElementById("mediaPane").hidden = v !== "media";
+  document.getElementById("fragmentsPane").hidden = v !== "fragments";
+  document.getElementById("historyPane").hidden = v !== "history";
   document.getElementById("tabPlan").classList.toggle("on", v === "plan");
   document.getElementById("tabModule").classList.toggle("on", v === "module");
   document.getElementById("tabWechat").classList.toggle("on", v === "wechat");
   document.getElementById("tabMedia").classList.toggle("on", v === "media");
+  document.getElementById("tabFragments").classList.toggle("on", v === "fragments");
+  document.getElementById("tabHistory").classList.toggle("on", v === "history");
   // 编排台专属按钮在模块视图下无意义
   document.getElementById("save").hidden = v !== "plan";
   document.getElementById("publish").hidden = v !== "plan";
   if (v === "module") loadModules();
   if (v === "media") {
     if (typeof loadMedia === "function") loadMedia();
+  }
+  if (v === "fragments") {
+    if (typeof loadFragments === "function") loadFragments();
+  }
+  if (v === "history") {
+    if (typeof loadHistory === "function") loadHistory();
   }
   if (v === "wechat") {
     // 公众号排版要基于「当前选中的条目」—— 先确保模块数据已加载
@@ -504,6 +536,8 @@ document.getElementById("tabPlan").addEventListener("click", () => switchView("p
 document.getElementById("tabModule").addEventListener("click", () => switchView("module"));
 document.getElementById("tabWechat").addEventListener("click", () => switchView("wechat"));
 document.getElementById("tabMedia").addEventListener("click", () => switchView("media"));
+document.getElementById("tabFragments").addEventListener("click", () => switchView("fragments"));
+document.getElementById("tabHistory").addEventListener("click", () => switchView("history"));
 
 // 模块面板的绑定（在 MODULE_PANEL_SCRIPT 之后执行）
 if (typeof bindModulePanel === "function") bindModulePanel();
@@ -511,6 +545,10 @@ if (typeof bindModulePanel === "function") bindModulePanel();
 if (typeof bindWechatPanel === "function") bindWechatPanel();
 // 媒体库面板的绑定（在 MEDIA_PANEL_SCRIPT 之后执行）
 if (typeof bindMediaPanel === "function") bindMediaPanel();
+// 片段面板的绑定（在 FRAGMENTS_PANEL_SCRIPT 之后执行）
+if (typeof bindFragmentsPanel === "function") bindFragmentsPanel();
+// 版本面板的绑定（在 HISTORY_PANEL_SCRIPT 之后执行）
+if (typeof bindHistoryPanel === "function") bindHistoryPanel();
 </script>
 </body>
 </html>
