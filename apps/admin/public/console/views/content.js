@@ -16,6 +16,7 @@ import { sortable } from "../lib/drag.js";
 import { openKbPicker, openImagePicker } from "../lib/picker.js";
 import { fixBanner, classify, canReview, howTo } from "../lib/fixes.js";
 import { go } from "../lib/router.js";
+import { openPublishPanel } from "../lib/publish.js";
 
 export function create(ctx) {
   const el = h("div", { class: "work" });
@@ -686,13 +687,13 @@ export function create(ctx) {
         { class: "issues" },
         empty({
           title: "校样通过",
-          text: "没有阻断问题，也没有提醒。可以去发布台了。",
+          text: "没有阻断问题，也没有提醒。可以发布了。",
           mark: "check",
           action: h("button", {
             class: "btn btn--ink btn--sm",
             type: "button",
-            text: "去发布",
-            onclick: () => go("release"),
+            text: "发布",
+            onclick: () => openPublishPanel(),
           }),
         }),
       );

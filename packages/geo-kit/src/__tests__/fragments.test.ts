@@ -225,8 +225,30 @@ describe("片段：引用展开", () => {
     expect(map.get("fg1")?.items).toHaveLength(2);
   });
 
-  it("片段不存在时展开不炸 —— 真正的拦截在校验", () => {
+  it("审核状态可以按引用点覆盖 —— 这一处改过的内容得单独审", () => {
+    const f = frag();
+    f.items[0].review = "approved";
     const m: PageModule = {
+      id: "mod1",
+      type: "rich-text",
+      items: [],
+      order: 0,
+      enabled: true,
+      fragmentId: "fg1",
+      overrides: {
+        items: [{ itemId: "it1", title: "这一处改过的标题", review: "pending" }],
+      },
+    };
+    const resolved = resolveFragmentModule(m, f);
+    // 覆盖生效：标题是这一处的，审核状态也是这一处的
+    expect(resolved.items[0].title).toBe("这一处改过的标题");
+    expect(resolved.items[0].review).toBe("pending");
+    // 片段本体不受影响 —— 别的引用点还按本体走
+    expect(f.items[0].review).toBe("approved");
+    expect(f.items[0].title).not.toBe("这一处改过的标题");
+  });
+
+  it("片段不存在时展开不炸 —— 真正的拦截在校验", () => {    const m: PageModule = {
       id: "mod1",
       type: "rich-text",
       items: [],

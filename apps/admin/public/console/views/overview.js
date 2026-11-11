@@ -10,6 +10,7 @@ import * as store from "../lib/store.js";
 import { api, ApiError } from "../lib/api.js";
 import { classify, gotoIssue } from "../lib/fixes.js";
 import { go } from "../lib/router.js";
+import { openPublishPanel } from "../lib/publish.js";
 
 export function create() {
   const el = h("div", { class: "work" });
@@ -50,7 +51,18 @@ export function create() {
           level: "error",
         }
       : null;
-    const reviewAlreadyBlocked = problems.some((p) => /^内容(待审核|被驳回)/.test(p.message));
+    // 「待审」是阻断项的**子集** —— 待审内容本身就不许发布。
+    //
+    // 以前这里写的是「如果待审已经被算成阻断，就不显示这一行」。
+    // 而待审**永远**会被算成阻断 —— 所以这一行**从来没有显示过**。
+    // 「待办」入口就是这么废掉的。
+    //
+    // 现在反过来：阻断行给总数并说明构成，审核行永远在（有待审就在）。
+    // 两个数字是包含关系，不是两个口径 —— 说得清就不会被当成矛盾。
+    const reviewCount = problems.filter((p) => {
+      const k = classify(p).kind;
+      return k === "review" || k === "resubmit";
+    }).length;
 
     const todos = [
       hold
@@ -66,14 +78,16 @@ export function create() {
             n: problems.length,
             alert: true,
             title: `${problems.length} 处阻断，发布会拦下`,
-            hint: classify(problems[0]).how,
+            hint: reviewCount
+              ? `其中 ${reviewCount} 条要审核，其余 ${problems.length - reviewCount} 条是字段问题`
+              : classify(problems[0]).how,
             run: () => gotoIssue(problems[0]),
           }
         : {
             n: "✓",
             title: "没有阻断问题",
-            hint: "校样通过，去发布台",
-            run: () => go("release"),
+            hint: "校样通过 —— 点右上角「发布」推上线",
+            run: () => openPublishPanel(),
           },
       drafts.length
         ? {
@@ -83,11 +97,11 @@ export function create() {
             run: () => go("content"),
           }
         : null,
-      pending.length && !reviewAlreadyBlocked
+      pending.length
         ? {
             n: pending.length,
             title: `${pending.length} 条内容等着审`,
-            hint: "去内容区点「通过审核」，通过后才进站点",
+            hint: "审完才进站点 —— 点这里逐条处理",
             run: () => {
               store.locate(pendingIssue);
               go("content");
@@ -142,7 +156,7 @@ export function create() {
             stat("页面", c.pages, `已上线 ${c.publishedPages}`, () => go("content")),
             stat("条目", c.items, `知识库引用 ${c.kb}`, () => go("content")),
             stat("草稿", c.drafts, "未进站点", () => go("content"), c.drafts > 0),
-            stat("待修", problems.length, `${warnings.length} 提醒`, () => go("release"), problems.length > 0),
+            stat("待修", problems.length, `${warnings.length} 提醒`, () => openPublishPanel(), problems.length > 0),
           ),
 
           h(
@@ -183,7 +197,7 @@ export function create() {
                       { class: "empty", style: { padding: "30px" } },
                       h("div", { class: "empty__mark" }, icon("check", 18)),
                       h("h3", { text: "干净" }),
-                      h("p", { text: "没有待办。可以去发布台把当前编排推上线。" }),
+                      h("p", { text: "没有待办。点右上角「发布」把当前编排推上线。" }),
                     ),
                   ]),
             ),

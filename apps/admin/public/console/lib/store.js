@@ -358,11 +358,62 @@ export function clearFocus({ silent = false } = {}) {
   if (!silent) emit("select");
 }
 
-/** 找到问题指向的那条内容（审核与一键修复都要精确定位） */
+/**
+ * 找到问题指向的那条内容（审核与一键修复都要精确定位）。
+ *
+ * 引用型模块的条目不在 mod.items 里 —— 在片段里（可能还有本地覆盖）。
+ * 以前只扫 mod.items，引用型模块一律返回 null，
+ * 于是「审核」「一键修复」对组件引用的内容全都落空。
+ */
 export function findItem(problem) {
   const pg = (state.plan?.pages ?? []).find((p) => p.id === problem?.pageId);
   const mod = (pg?.modules ?? []).find((m) => m.id === problem?.moduleId);
-  return (mod?.items ?? []).find((i) => i.id === problem?.itemId) ?? null;
+  if (!mod) return null;
+  if (!mod.fragmentId) {
+    return (
+      (mod.items ?? []).find((i) => i.id === problem?.itemId) ??
+      (mod.extraItems ?? []).find((i) => i.id === problem?.itemId) ??
+      null
+    );
+  }
+  const entry = fragmentEntries(mod).find((e) => e.id === problem?.itemId);
+  return entry ? effectiveItem(entry) : null;
+}
+
+/**
+ * 把审核状态写到**真正存它的那个地方**。
+ *
+ * 三处落点，别混：
+ *   普通模块条目      → mod.items[i].review
+ *   引用点本地追加    → mod.extraItems[i].review
+ *   引用型模块        → 有覆盖写覆盖，没有覆盖写片段本体
+ *
+ * 服务端写盘用的是同一套规则（见 server.ts 的 modules/review）。
+ */
+function setItemReview(problem, decision) {
+  const pg = (state.plan?.pages ?? []).find((p) => p.id === problem?.pageId);
+  const mod = (pg?.modules ?? []).find((m) => m.id === problem?.moduleId);
+  if (!mod) return false;
+
+  if (!mod.fragmentId) {
+    const item =
+      (mod.items ?? []).find((i) => i.id === problem?.itemId) ??
+      (mod.extraItems ?? []).find((i) => i.id === problem?.itemId);
+    if (!item) return false;
+    item.review = decision;
+    return true;
+  }
+
+  const ov = (mod.overrides?.items ?? []).find((o) => o.itemId === problem?.itemId);
+  if (ov) {
+    ov.review = decision;
+    return true;
+  }
+  const frag = state.fragments.find((f) => f.id === mod.fragmentId);
+  const item = (frag?.items ?? []).find((i) => i.id === problem?.itemId);
+  if (!item) return false;
+  item.review = decision;
+  return true;
 }
 
 /** 已上线但卡在审核上的条目 —— 概览的「待审」从这里找到终点 */
@@ -398,8 +449,8 @@ export async function reviewItem(problem, decision) {
     itemId: problem.itemId,
     decision,
   });
-  const item = findItem(problem);
-  if (item) item.review = decision;
+  // 服务端已经写盘了 —— 本地也要跟上，否则下一次保存会把审核结果覆盖回去。
+  setItemReview(problem, decision);
   state.ui.focusIssue = null;
   emit("plan");
   await runCheck({ silent: true });
@@ -823,6 +874,8 @@ const OVERRIDE_FIELDS = [
   "title", "summary", "body", "image", "question", "answer",
   "value", "unit", "label", "href", "client", "results", "specs",
   "alt", "caption", "step", "published",
+  // 审核状态也要跟着覆盖走 —— 引用点改过内容就是新内容，得单独审。
+  "review",
 ];
 
 /** 片段本体 + 本地追加 —— 引用型模块下「实际有哪些条目」 */

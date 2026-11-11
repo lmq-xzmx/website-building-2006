@@ -13,6 +13,7 @@
  */
 
 import { readFile, stat } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -144,6 +145,30 @@ for (const rel of seen) {
     problems.push(`${rel}:${line + 1} ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`);
   }
   notes.push(`名字检查：${jsFiles.length} 个文件，用到但没导入的名字 0 个`);
+}
+
+/* ── 7. 语法对不对 ───────────────────────────────────────── */
+//
+// 第二个漏网之处：上面那段只取「找不到这个名字」这一类诊断，
+// 于是**语法错误被过滤掉了** —— 而语法错误会让整个模块直接不执行，
+// 页面一片空白，浏览器里只报一句 Unexpected token。
+//
+// 这一段只做解析（不做类型检查），把 parseDiagnostics 全报出来。
+{
+  const ts = await import("typescript");
+  let bad = 0;
+  for (const rel of seen) {
+    if (!rel.endsWith(".js")) continue;
+    const file = resolve(consoleDir, rel);
+    const text = readFileSync(file, "utf8");
+    const sf = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true);
+    for (const d of sf.parseDiagnostics ?? []) {
+      const { line } = sf.getLineAndCharacterOfPosition(d.start ?? 0);
+      problems.push(`${rel}:${line + 1} 语法错误 ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`);
+      bad++;
+    }
+  }
+  notes.push(`语法检查：${seen.size} 个模块，语法错误 ${bad} 个`);
 }
 
 /* ── 结果 ─────────────────────────────────────────────── */

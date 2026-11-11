@@ -6,7 +6,7 @@
  * 这里把校验文案翻译成待办：说清改什么、给一个按钮、做完自动重校验。
  *
  * classify() 是纯函数（只认文案）；动作落在 store / router 上，
- * 发布台、内容区、概览共用同一套，不会三处各写一遍、各断一处。
+ * 发布面板、内容区、概览共用同一套，不会三处各写一遍、各断一处。
  */
 
 import { h, icon, toast } from "./dom.js";
@@ -135,6 +135,59 @@ export function canReview() {
   return store.can("content.review");
 }
 
+/**
+ * 发布状态 —— **一处算，处处用**。
+ *
+ * 为什么要有这个函数：
+ *   「待处理 N 处」「M 条待审」「K 条草稿」这三个数字原来分散在
+ *   顶栏、导轨、发布面板、概览四处各算各的 —— 同一个事情四个口径。
+ *   点开发现对不上，整套界面就不可信了。
+ *
+ * 现在口径只有一份：**阻断清单 `check.problems` 是唯一事实源**，
+ * 「待审核」是它的子集（待审内容本身就不许发布）。
+ *
+ * 分组依据 `classify()` 的 kind，不靠文案匹配 —— 文案一改就断。
+ */
+export function publishState() {
+  const check = store.state.check;
+  const problems = check.problems ?? [];
+  const hold = check.checking || !check.ready || check.kbDown;
+
+  let review = 0;
+  for (const p of problems) {
+    const k = classify(p).kind;
+    if (k === "review" || k === "resubmit") review++;
+  }
+  const toFix = problems.length - review;
+  const c = store.counts();
+
+  return {
+    /** 校样没就绪 / 知识库断了 —— 现在还不能判断能不能发 */
+    hold,
+    kbDown: !!check.kbDown,
+    /** 挡住发布的总数（含待审） */
+    blockers: problems.length,
+    /** 其中等着审核的 */
+    review,
+    /** 其中要改字段的 */
+    toFix,
+    /** 没发布的条目 —— 不挡发布，只是不会上线 */
+    drafts: c.drafts,
+    /** 不挡发布的提醒 */
+    warnings: (check.warnings ?? []).length,
+    /** 校样通过、没阻断 */
+    ready: !hold && problems.length === 0,
+  };
+}
+
+/** 发布状态的一句话 —— 顶栏、发布面板、上线记录共用同一句 */
+export function publishStateLabel(st) {
+  if (st.hold) return st.kbDown ? "知识库未连" : "校样中…";
+  if (!st.blockers) return "可发布";
+  if (st.review === st.blockers) return `${st.review} 条待审`;
+  return `${st.blockers} 处待处理`;
+}
+
 /** 跳到出问题的地方，并带上一条「改什么」的提示 */
 export function gotoIssue(p) {
   if (!p) return;
@@ -160,7 +213,7 @@ export async function performFix(p) {
 }
 
 /**
- * 待办右侧那颗按钮。发布台 / 内容区提示条 / 校样清单共用。
+ * 待办右侧那颗按钮。发布面板 / 内容区提示条共用。
  * onDone 只用来关掉局部 UI，清单刷新由 store 的 check / plan 事件负责。
  */
 export function issueAction(p, { onDone } = {}) {

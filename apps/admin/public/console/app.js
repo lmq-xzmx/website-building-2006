@@ -10,6 +10,8 @@
 import { h, icon, mount, clear, toast, dialog, drawer, empty, relTime } from "./lib/dom.js";
 import { ApiError, api } from "./lib/api.js";
 import { VIEWS, go, onRoute, parseHash, start as startRouter, currentView } from "./lib/router.js";
+import { publishState, publishStateLabel } from "./lib/fixes.js";
+import { openPublishPanel } from "./lib/publish.js";
 import * as store from "./lib/store.js";
 
 import * as overview from "./views/overview.js";
@@ -171,8 +173,6 @@ function buildChrome() {
 function updateChrome() {
   if (!railEl) return;
   const active = currentView() ?? parseHash().view;
-  const c = store.counts();
-  const blockers = store.state.check.problems.length;
 
   mount(
     railEl,
@@ -186,8 +186,14 @@ function updateChrome() {
       "div",
       { class: "rail__nav" },
       ...VIEWS.map((v) => {
-        const badge =
-          v.id === "release" && blockers ? h("span", { class: "rail__badge", text: String(blockers) }) : null;
+        // 导轨是**作业区**，不是动作区 —— 这里不放发布按钮，也不挂徽标。
+        //
+        // 以前挂了两个徽标：「发布」挂阻断数、「待办」挂待审数。
+        // 而待审项本身就是阻断项，待审数永远是阻断数的**子集**，
+        // 两个数字永远对不上 —— 用户点开发现不一致，整套界面就不可信了。
+        //
+        // 现在：导轨只管「去哪」。「能不能发」的读数贴在顶栏的发布按钮上，
+        // 那才是发布的地方 —— 数字只有一份。
         return h(
           "button",
           {
@@ -199,21 +205,8 @@ function updateChrome() {
           },
           icon(v.icon, 18),
           h("span", { text: v.label }),
-          badge,
         );
       }),
-      h(
-        "button",
-        {
-          class: "rail__item",
-          type: "button",
-          title: `草稿 ${c.drafts} 条 · 待审 ${c.pending} 条`,
-          onclick: () => go("release"),
-        },
-        icon("clock", 18),
-        h("span", { text: "待办" }),
-        c.pending ? h("span", { class: "rail__badge", text: String(c.pending) }) : null,
-      ),
     ),
     h("span", { class: "rail__spacer" }),
     h(
@@ -241,10 +234,11 @@ function updateTopbar() {
   const view = VIEWS.find((v) => v.id === (currentView() ?? "overview"));
   const page = store.currentPage();
   const c = store.counts();
-  const check = store.state.check;
-  const blockers = check.problems.length;
-  const hold = check.checking || !check.ready || check.kbDown;
-  const warnCount = check.warnings.length;
+  // 数字只有一份口径 —— 顶栏、导轨、发布面板、概览都走 publishState()
+  const st = publishState();
+  const blockers = st.blockers;
+  const hold = st.hold;
+  const warnCount = st.warnings;
 
   mount(
     topbarEl,
@@ -269,12 +263,27 @@ function updateTopbar() {
     ),
     h("span", { class: "topbar__spacer" }),
 
+    /* 保存状态 —— 兼作保存入口。
+     *
+     * 以前这里是两颗按钮：「未保存」（一个只读小标）+「保存」（一颗按钮），
+     * 紧挨着又挨着「发布」。三个都像能按的动词按钮，点哪个都不确定。
+     *
+     * 现在合成一颗芯片：未保存时它自己就是保存按钮（点一下就存），
+     * 已保存时它只报状态。**发布按钮是唯一剩下的动词。**
+     */
     store.state.dirty
       ? h(
-          "span",
-          { class: "dirty", title: "有改动还没写进 modules.json —— ⌘S 保存" },
+          "button",
+          {
+            id: "topbar-save",
+            class: "dirty dirty--btn",
+            type: "button",
+            title: "有改动还没写进 modules.json —— 点一下就保存（⌘S）",
+            disabled: store.state.saving,
+            onclick: saveNow,
+          },
           h("i"),
-          "未保存",
+          store.state.saving ? "保存中…" : "未保存 · 点此保存",
         )
       : store.state.lastSavedAt
         ? h("span", { class: "muted", style: { fontSize: "11.5px" }, text: `已保存 · ${relTime(store.state.lastSavedAt)}` })
@@ -307,31 +316,34 @@ function updateTopbar() {
       h("span", { class: "kbd", text: "⌘K" }),
     ),
 
-    h(
-      "button",
-      {
-        id: "topbar-save",
-        class: "btn btn--sm",
-        type: "button",
-        disabled: !store.state.dirty || store.state.saving,
-        title: "保存编排（⌘S）",
-        onclick: saveNow,
-      },
-      icon("save", 14),
-      store.state.saving ? "保存中…" : "保存",
-    ),
-
+    /* 发布 —— 全站唯一的发布动作。
+     *
+     * 以前这颗按钮只做一件事：跳到发布台。长得像动作，按下去只是换页，
+     * 于是「发布」在五个地方出现、三个是死跳转。
+     * 现在它就是发布：点开面板，看清要发什么、有什么挡着，确认后发布。
+     */
     h(
       "button",
       {
         id: "topbar-publish",
         class: `btn ${blockers || hold ? "" : "btn--stamp"} btn--sm`,
         type: "button",
-        title: hold ? "校样还没就绪" : blockers ? `${blockers} 处阻断问题，先修完再发布` : "去发布台",
-        onclick: () => go("release"),
+        disabled: hold,
+        title: hold
+          ? "校样还没就绪"
+          : blockers
+            ? `${blockers} 处待处理（其中 ${st.review} 条待审）—— 点开逐条处理`
+            : `${publishStateLabel(st)} —— 校样 → 物化 → 重建静态站`,
+        onclick: () => openPublishPanel(),
       },
       icon("upload", 14),
-      hold ? "校样中…" : blockers ? `发布 · ${blockers} 处待修` : warnCount ? `发布 · ${warnCount} 提醒` : "发布",
+      hold
+        ? "校样中…"
+        : blockers
+          ? `发布 · ${blockers} 处待处理`
+          : warnCount
+            ? "发布"
+            : "发布",
     ),
   );
 }

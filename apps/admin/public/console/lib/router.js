@@ -12,7 +12,10 @@ export const VIEWS = [
   { id: "media", label: "素材", icon: "image", title: "图片资产" },
   { id: "components", label: "组件", icon: "block", title: "可复用片段" },
   { id: "wechat", label: "分发", icon: "send", title: "排成公众号文章" },
-  { id: "release", label: "发布", icon: "upload", title: "校验、上线、回滚" },
+  // 「上线记录」而不是「发布」——
+  // 这一项管的是**档案**（发过什么、怎么退回去），不是发布动作。
+  // 发布动作在顶栏，全站只有那一个。名字分开，意图才不会混。
+  { id: "release", label: "上线记录", icon: "clock", title: "发过什么 · 怎么退回去" },
   { id: "appearance", label: "外观", icon: "palette", title: "版式与色板" },
 ];
 

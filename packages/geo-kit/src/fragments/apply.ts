@@ -53,6 +53,10 @@ const ITEM_OVERRIDE_FIELDS = [
   "caption",
   "step",
   "published",
+  // 审核状态也是「写回条目上的字段」——
+  // 引用点改过这条内容，它就是一条新内容，审核状态得跟着这一处走，
+  // 不能拿片段本体的「已通过」顶替。
+  "review",
 ] as const;
 
 /** 把一条覆盖应用到条目上 */

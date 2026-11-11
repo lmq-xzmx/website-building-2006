@@ -790,12 +790,61 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         return;
       }
       const plan = await readModulePlan(dir, modulesReview[1]);
+      const { lib: fragLib, map: fragMap } = await loadFragments(dir, modulesReview[1]);
       let hit = 0;
+      /** 片段本体被改过 —— 要另写 fragments.json */
+      let fragTouched = false;
+
       for (const page of plan.pages ?? []) {
         if (payload.pageId && page.id !== payload.pageId) continue;
         for (const mod of page.modules ?? []) {
           if (payload.moduleId && mod.id !== payload.moduleId) continue;
+
+          // ── 引用型模块：条目不在 mod.items 里，在片段里 ──────
+          //
+          // 以前这里只扫 mod.items —— 而引用型模块的 items 是空的，
+          // 所以**审核对组件引用的内容完全无效**（必然 0 条）。
+          // 而现在的站点十有八九是引用型模块，这条路等于没通。
+          if (mod.fragmentId) {
+            const fragment = fragMap.get(mod.fragmentId);
+            if (!fragment) continue;
+            const ovItems = mod.overrides?.items ?? [];
+
+            if (!payload.itemId) {
+              // 整块通过在片段上没有明确含义 ——
+              // 片段本体是多处共享的，整块通过会连带改掉所有引用点。
+              // 明确拒绝，比悄悄改了别人的内容强。
+              json(res, 400, {
+                error: "组件引用的内容要逐条审核 —— 片段是多处共享的，整块通过会改到所有引用点。",
+                code: "fragment_review_needs_item",
+              });
+              return;
+            }
+
+            const ov = ovItems.find((o) => o.itemId === payload.itemId);
+            if (ov) {
+              // 这一处改过内容 —— 审核状态跟着这一处走
+              ov.review = decision;
+              hit++;
+              continue;
+            }
+            // 这一处看的就是片段本体 —— 审的是共享内容，审一次所有引用点一起过
+            const target = (fragment.items ?? []).find((i) => i.id === payload.itemId);
+            if (!target) continue;
+            target.review = decision;
+            fragTouched = true;
+            hit++;
+            continue;
+          }
+
+          // ── 普通模块：条目就在模块里 ──────────────────────
           for (const item of mod.items ?? []) {
+            if (payload.itemId && item.id !== payload.itemId) continue;
+            item.review = decision;
+            hit++;
+          }
+          // 引用点本地追加的条目（extraItems）也在这一处
+          for (const item of mod.extraItems ?? []) {
             if (payload.itemId && item.id !== payload.itemId) continue;
             item.review = decision;
             hit++;
@@ -814,6 +863,10 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       }
       plan.updatedAt = new Date().toISOString();
       await writeModulePlan(dir, plan);
+      if (fragTouched) {
+        fragLib.updatedAt = new Date().toISOString();
+        await writeFragmentLibrary(dir, fragLib);
+      }
       json(res, 200, { ok: true, decision, count: hit });
       return;
     }

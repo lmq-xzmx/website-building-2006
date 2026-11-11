@@ -590,7 +590,7 @@ export function create() {
               if (ok) toast("实例已保存", { kind: "ok" });
             },
           }),
-          h("span", { class: "muted", style: { fontSize: "11.5px" }, text: "保存后点「生成前台页面」，再去发布台上线。" }),
+          h("span", { class: "muted", style: { fontSize: "11.5px" }, text: "保存后点「生成前台页面」，再点右上角「发布」上线。" }),
         ),
       ),
     );
