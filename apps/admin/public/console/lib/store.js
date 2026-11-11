@@ -30,13 +30,15 @@ export const state = {
   /** 知识库（只读） */
   kb: { bases: [], items: [], loading: false, error: "", at: 0 },
   kbId: "",
+  /** 片段库（组件）—— 内容区要显示「引用点实际长什么样」，得读得到本体 */
+  fragments: [],
   /** 校验 + 物化预览。ready=false 时界面不能说「可以发布」——那是假阳性 */
   check: { problems: [], warnings: [], stats: null, pages: [], at: 0, running: false, error: "", materialized: false, checking: false, ready: false, kbDown: false },
   /** 当前工位选择 */
   sel: { pageId: null, moduleId: null, itemId: null },
   /** 界面态 */
   /** 界面态：focusIssue = 从待办跳过来的那条问题，内容区据此给修复提示 */
-  ui: { device: "desktop", mode: "edit", kbOpen: false, structQuery: "", focusIssue: null },
+  ui: { device: "desktop", mode: "edit", kbOpen: false, structQuery: "", focusIssue: null, flash: null, highlightFragmentId: null },
   undoStack: [],
 };
 
@@ -247,10 +249,34 @@ export function modulesOf(page) {
 
 export function itemsOf(mod) {
   if (!mod) return [];
+  if (mod.fragmentId) return resolvedItems(mod, { publishedOnly: false });
   return (mod.items ?? []).slice().sort((a, b) => {
     if (!!b.sticky !== !!a.sticky) return b.sticky ? 1 : -1;
     return a.order - b.order;
   });
+}
+
+/**
+ * 引用型模块的实际条目 —— 片段本体 + 覆盖 + 本地追加，按展示顺序排好。
+ *
+ * 服务端物化走的是同一套逻辑；这里要在**浏览器里**算一遍，
+ * 因为未发布页面的本地预览没有服务端那份物化结果。
+ *
+ * publishedOnly：只给已发布的（预览用）—— 草稿不进站。
+ */
+export function resolvedItems(mod, { publishedOnly = true } = {}) {
+  if (!mod) return [];
+  const list = mod.fragmentId
+    ? fragmentEntries(mod).map((e) => ({ item: e.item, override: e.override, hidden: e.hidden, draft: e.draft }))
+    : (mod.items ?? []).map((it) => ({ item: it, override: null, hidden: false, draft: it.published === false }));
+  return list
+    .filter((e) => !e.hidden)
+    .filter((e) => (publishedOnly ? !e.draft : true))
+    .map((e) => effectiveItem(e))
+    .sort((a, b) => {
+      if (!!b.sticky !== !!a.sticky) return b.sticky ? 1 : -1;
+      return (a.order ?? 0) - (b.order ?? 0);
+    });
 }
 
 export function currentPage() {
@@ -266,7 +292,14 @@ export function currentModule(page) {
 export function currentItem(mod) {
   const m = mod ?? currentModule();
   if (!m) return null;
-  return (m.items ?? []).find((it) => it.id === state.sel.itemId) ?? null;
+  const own = (m.items ?? []).find((it) => it.id === state.sel.itemId);
+  if (own) return own;
+  // 引用型模块的条目住在片段里 —— 选中的是「片段里的某一条」
+  if (m.fragmentId) {
+    const entry = fragmentEntries(m).find((e) => e.id === state.sel.itemId);
+    return entry ? effectiveItem(entry) : null;
+  }
+  return null;
 }
 
 export function pruneSelection() {
@@ -285,7 +318,11 @@ export function pruneSelection() {
     state.sel.itemId = null;
   }
   const mod = (page?.modules ?? []).find((m) => m.id === state.sel.moduleId);
-  if (!(mod?.items ?? []).some((it) => it.id === state.sel.itemId)) state.sel.itemId = null;
+  // 引用型模块的条目不在 mod.items 里 —— 选中的是片段里的某一条
+  const owns = mod?.fragmentId
+    ? fragmentEntries(mod).some((e) => e.id === state.sel.itemId)
+    : (mod?.items ?? []).some((it) => it.id === state.sel.itemId);
+  if (!owns) state.sel.itemId = null;
 }
 
 export function select({ pageId, moduleId, itemId } = {}) {
@@ -333,7 +370,7 @@ export function pendingItems() {
   const out = [];
   for (const pg of state.plan?.pages ?? []) {
     for (const mod of pg.modules ?? []) {
-      for (const it of mod.items ?? []) {
+      for (const it of itemsOf(mod)) {
         if (it.published && (it.review === "pending" || it.review === "rejected")) {
           out.push({ page: pg, mod, item: it });
         }
@@ -399,7 +436,9 @@ export function counts() {
     for (const m of pg.modules ?? []) {
       if (!m.enabled) continue;
       modules++;
-      for (const it of m.items ?? []) {
+      // 引用型模块的条目住在片段里 —— 统计要按展开后的算，
+      // 否则「10 个模块 0 条内容」看着像站点是空的。
+      for (const it of itemsOf(m)) {
         items++;
         if (it.source === "kb") kb++;
         if (!it.published) drafts++;
@@ -453,7 +492,7 @@ export function usedKbIds() {
   const set = new Set();
   for (const pg of state.plan?.pages ?? []) {
     for (const m of pg.modules ?? []) {
-      for (const it of m.items ?? []) if (it.kbItemId) set.add(it.kbItemId);
+      for (const it of itemsOf(m)) if (it.kbItemId) set.add(it.kbItemId);
     }
   }
   return set;
@@ -537,14 +576,13 @@ function localMaterialize(plan) {
           title: m.title,
           subtitle: m.subtitle,
           props: m.props,
-          items: (m.items ?? [])
-            .filter((it) => it.published)
-            .sort((a, b) => a.order - b.order)
-            .map((it) => ({
-              ...it,
-              paragraphs: it.body ? bodyToParagraphs(it.body) : [],
-              pendingKb: it.source === "kb" && !it.body,
-            })),
+          // 引用型模块：条目住在片段里 —— 兜底物化也要展开，
+          // 否则知识库没连上时，引用块在预览里是空的。
+          items: resolvedItems(m, { publishedOnly: true }).map((it) => ({
+            ...it,
+            paragraphs: it.body ? bodyToParagraphs(it.body) : [],
+            pendingKb: it.source === "kb" && !it.body,
+          })),
         })),
     }));
 }
@@ -721,7 +759,13 @@ export function addManualItem(moduleId) {
     review: "approved",
     ...tpl,
   };
-  mod.items.push(item);
+  // 引用型模块：条目归片段管 —— 新加的只能算「本地追加」，
+  // 写进 items 会被展开逻辑忽略（那儿只认片段本体 + extraItems）。
+  if (mod.fragmentId) {
+    mod.extraItems = [...(mod.extraItems ?? []), item];
+  } else {
+    mod.items.push(item);
+  }
   touch();
   select({ pageId: page.id, moduleId: mod.id, itemId: item.id });
   emit("plan");
@@ -755,11 +799,246 @@ export function addKbItem(kbItem, moduleId) {
   if (mod.type === "process") {
     item.step = (mod.items?.length ?? 0) + 1;
   }
-  mod.items.push(item);
+  if (mod.fragmentId) {
+    mod.extraItems = [...(mod.extraItems ?? []), item];
+  } else {
+    mod.items.push(item);
+  }
   touch();
   select({ pageId: page.id, moduleId: mod.id, itemId: item.id });
   emit("plan");
   return item;
+}
+
+/* ── 片段引用的增删改查 ───────────────────────────────────── */
+/*
+ * 「组件引入站点后也要能增删改查」—— 四件事各有各的落点：
+ *   查 读片段本体 + 覆盖，算出这一处**实际显示**的内容
+ *   改 写 override（只改这一处，不动片段本体）
+ *   删 隐藏 override.hidden（片段本体不动，其他引用点不受影响）
+ *   增 写 extraItems（本地追加，不进片段本体）
+ */
+
+const OVERRIDE_FIELDS = [
+  "title", "summary", "body", "image", "question", "answer",
+  "value", "unit", "label", "href", "client", "results", "specs",
+  "alt", "caption", "step", "published",
+];
+
+/** 片段本体 + 本地追加 —— 引用型模块下「实际有哪些条目」 */
+export function fragmentEntries(mod) {
+  if (!mod?.fragmentId) return [];
+  const frag = state.fragments.find((f) => f.id === mod.fragmentId);
+  const ovItems = mod.overrides?.items ?? [];
+  const out = [];
+  for (const it of frag?.items ?? []) {
+    const io = ovItems.find((o) => o.itemId === it.id) ?? null;
+    out.push({
+      id: it.id,
+      origin: "fragment",
+      item: it,
+      override: io,
+      /** 显式隐藏（override.hidden）—— 与「草稿」是两回事 */
+      hidden: !!io?.hidden,
+      /** 草稿（不发布这一条） */
+      draft: it.published === false,
+      label: it.title || it.question || it.label || "无标题条目",
+    });
+  }
+  for (const it of mod.extraItems ?? []) {
+    out.push({
+      id: it.id,
+      origin: "local",
+      item: it,
+      override: null,
+      hidden: false,
+      draft: it.published === false,
+      label: it.title || it.question || it.label || "无标题条目",
+    });
+  }
+  return out;
+}
+
+/** 这一处实际显示的那条 —— 片段本体被覆盖后的结果 */
+export function effectiveItem(entry) {
+  if (!entry) return null;
+  const out = { ...entry.item };
+  const io = entry.override;
+  if (io) {
+    for (const f of OVERRIDE_FIELDS) {
+      if (io[f] !== undefined) out[f] = io[f];
+    }
+  }
+  return out;
+}
+
+function overrideOf(mod, itemId) {
+  const list = mod.overrides?.items ?? [];
+  return list.find((o) => o.itemId === itemId) ?? null;
+}
+
+function ensureOverride(mod, itemId) {
+  if (!mod.overrides) mod.overrides = {};
+  if (!Array.isArray(mod.overrides.items)) mod.overrides.items = [];
+  let io = mod.overrides.items.find((o) => o.itemId === itemId);
+  if (!io) {
+    io = { itemId };
+    mod.overrides.items.push(io);
+  }
+  return io;
+}
+
+/** 改这一处的覆盖 —— 片段本体不动 */
+export function setFragmentOverride(moduleId, itemId, patch) {
+  const mod = findModule(moduleId);
+  if (!mod?.fragmentId) return null;
+  pushUndo("改引用内容");
+  const io = ensureOverride(mod, itemId);
+  Object.assign(io, patch);
+  touch();
+  emit("plan");
+  return io;
+}
+
+/** 这一处不要这条 —— 只是隐藏，片段本体与其他引用点不受影响 */
+export function hideFragmentItem(moduleId, itemId, hidden = true) {
+  const mod = findModule(moduleId);
+  if (!mod?.fragmentId) return null;
+  pushUndo(hidden ? "在这一处隐藏" : "在这一处恢复");
+  const io = ensureOverride(mod, itemId);
+  io.hidden = hidden;
+  touch();
+  emit("plan");
+  return io;
+}
+
+/** 撤销这一处的全部覆盖 —— 回到片段本体的样子 */
+export function resetFragmentOverride(moduleId, itemId) {
+  const mod = findModule(moduleId);
+  if (!mod?.fragmentId) return null;
+  pushUndo("恢复片段原样");
+  if (mod.overrides?.items) {
+    mod.overrides.items = mod.overrides.items.filter((o) => o.itemId !== itemId);
+    if (!mod.overrides.items.length) delete mod.overrides.items;
+    if (!Object.keys(mod.overrides).length) delete mod.overrides;
+  }
+  touch();
+  emit("plan");
+  return true;
+}
+
+/** 本地追加一条 —— 只在这一处出现 */
+export function addLocalItem(moduleId) {
+  const mod = findModule(moduleId);
+  if (!mod?.fragmentId) return null;
+  pushUndo("本地追加一条");
+  const tpl = MODULE_DEFAULT_ITEM[mod.type]?.() ?? { title: "新条目" };
+  const frag = fragmentById(mod.fragmentId);
+  const item = {
+    id: uid("it"),
+    source: "manual",
+    // 排在片段本体的条目之后 —— 本地追加是「补充」，不是「插队」
+    order: (frag?.items?.length ?? 0) + (mod.extraItems?.length ?? 0),
+    published: true,
+    review: "approved",
+    ...tpl,
+  };
+  mod.extraItems = [...(mod.extraItems ?? []), item];
+  touch();
+  emit("plan");
+  return item;
+}
+
+/** 删掉本地追加的那条 */
+export function deleteLocalItem(moduleId, itemId) {
+  const mod = findModule(moduleId);
+  if (!mod?.fragmentId) return null;
+  const idx = (mod.extraItems ?? []).findIndex((i) => i.id === itemId);
+  if (idx < 0) return null;
+  pushUndo("删除本地条目");
+  mod.extraItems.splice(idx, 1);
+  touch();
+  emit("plan");
+  return true;
+}
+
+/** 本地追加那条的内容也要能改 */
+export function updateLocalItem(moduleId, itemId, patch) {
+  const mod = findModule(moduleId);
+  const item = (mod?.extraItems ?? []).find((i) => i.id === itemId);
+  if (!item) return null;
+  Object.assign(item, patch);
+  touch();
+  emit("plan");
+  return item;
+}
+
+/** 按 id 找模块（跨页面） */
+export function findModule(moduleId) {
+  for (const pg of state.plan?.pages ?? []) {
+    const m = (pg.modules ?? []).find((x) => x.id === moduleId);
+    if (m) return m;
+  }
+  return null;
+}
+
+/** 引用型模块展开后的实际标题 —— 覆盖 > 模块自带 > 片段本体 */
+export function effectiveHeading(mod) {
+  if (!mod) return { title: "", subtitle: "" };
+  if (!mod.fragmentId) return { title: mod.title ?? "", subtitle: mod.subtitle ?? "" };
+  const frag = state.fragments.find((f) => f.id === mod.fragmentId);
+  return {
+    title: mod.overrides?.title ?? mod.title ?? frag?.title ?? "",
+    subtitle: mod.overrides?.subtitle ?? mod.subtitle ?? frag?.subtitle ?? "",
+  };
+}
+
+/** 引用型模块展开后的实际 props —— { ...片段props, ...覆盖props } */
+export function effectiveProps(mod) {
+  if (!mod) return {};
+  if (!mod.fragmentId) return mod.props ?? {};
+  const frag = state.fragments.find((f) => f.id === mod.fragmentId);
+  return { ...(frag?.props ?? {}), ...(mod.overrides?.props ?? {}) };
+}
+
+/**
+ * 改模块级标题/副标题。
+ *
+ * 引用型模块：写进 overrides（模块标题是「这一处的例外」）。
+ * 普通模块：直接写模块自身。
+ */
+export function setModuleHeading(moduleId, patch) {
+  const mod = findModule(moduleId);
+  if (!mod) return;
+  if (mod.fragmentId) {
+    if (!mod.overrides) mod.overrides = {};
+    Object.assign(mod.overrides, patch);
+  } else {
+    Object.assign(mod, patch);
+  }
+  touch();
+  emit("plan");
+}
+
+/**
+ * 改模块级配置（列数、卡片类型等）。
+ *
+ * 引用型模块要特别小心：展开时 props 是
+ *   { ...片段props, ...覆盖props }
+ * —— 直接写 mod.props 会被**忽略**。所以引用型模块必须写进 overrides.props。
+ */
+export function updateModuleProps(moduleId, patch) {
+  const mod = findModule(moduleId);
+  if (!mod) return;
+  if (mod.fragmentId) {
+    pushUndo("改模块配置");
+    if (!mod.overrides) mod.overrides = {};
+    mod.overrides.props = { ...(mod.overrides.props ?? {}), ...patch };
+  } else {
+    mod.props = { ...(mod.props ?? {}), ...patch };
+  }
+  touch();
+  emit("plan");
 }
 
 export function deleteItem(moduleId, itemId) {
@@ -868,9 +1147,107 @@ export const MODULE_TYPE_DESC = {
 export function fragmentUsage(fragmentId) {
   const out = [];
   for (const pg of state.plan?.pages ?? []) {
-    for (const m of pg.modules ?? []) {
-      if (m.fragmentId === fragmentId) out.push({ pageId: pg.id, pageTitle: pg.title, pagePath: pg.path, moduleId: m.id });
-    }
+    const mods = pg.modules ?? [];
+    mods.forEach((m, i) => {
+      if (m.fragmentId !== fragmentId) return;
+      out.push({
+        pageId: pg.id,
+        pageTitle: pg.title,
+        pagePath: pg.path,
+        moduleId: m.id,
+        moduleTitle: m.title || MODULE_TYPE_LABEL[m.type] || m.type,
+        moduleType: m.type,
+        /** 在页面里的第几块 —— 「哪个位置」要说清楚，不能只给页面 */
+        position: i + 1,
+        moduleCount: mods.length,
+        itemCount: fragmentEntries(m).length,
+      });
+    });
   }
   return out;
+}
+
+/** 编排里所有引用型模块 —— 内容区用来画「哪些位置是组件」 */
+export function fragmentModules() {
+  const out = [];
+  for (const pg of state.plan?.pages ?? []) {
+    const mods = pg.modules ?? [];
+    mods.forEach((m, i) => {
+      if (!m.fragmentId) return;
+      out.push({
+        pageId: pg.id,
+        pageTitle: pg.title,
+        pagePath: pg.path,
+        moduleId: m.id,
+        moduleTitle: m.title || MODULE_TYPE_LABEL[m.type] || m.type,
+        fragmentId: m.fragmentId,
+        fragmentName: fragmentById(m.fragmentId)?.name ?? m.fragmentId,
+        position: i + 1,
+      });
+    });
+  }
+  return out;
+}
+
+/**
+ * 高亮目标 —— 从组件区跳到内容区时，要一眼看到「就是这一块」。
+ * 只放 id，不放整份快照：内容会变，id 不会。
+ */
+export function flashModule(pageId, moduleId) {
+  state.ui.flash = { pageId, moduleId, at: Date.now() };
+  emit("flash");
+}
+
+export function takeFlash() {
+  const f = state.ui.flash;
+  return f ?? null;
+}
+
+/**
+ * 「标出这个组件在哪些位置被用了」——
+ * 内容区里所有引用这个片段的模块都会加框高亮。
+ *
+ * 为什么要有这个模式：组件页列出的是「清单」，
+ * 内容区画出来的是「框」—— 清单说有几处，框说在哪。
+ */
+export function setHighlightFragment(fragmentId) {
+  state.ui.highlightFragmentId = state.ui.highlightFragmentId === fragmentId ? null : fragmentId;
+  emit("highlight");
+  return state.ui.highlightFragmentId;
+}
+
+export function highlightFragmentId() {
+  return state.ui.highlightFragmentId ?? null;
+}
+
+/** 读片段库 —— 引用点要显示「实际长什么样」，得拿到本体 */
+export async function loadFragments() {
+  if (!state.siteId) return [];
+  try {
+    const d = await api.fragments(state.siteId);
+    state.fragments = d.fragments ?? d.lib?.fragments ?? [];
+  } catch {
+    state.fragments = [];
+  }
+  emit("fragments");
+  return state.fragments;
+}
+
+export function fragmentById(id) {
+  return state.fragments.find((f) => f.id === id) ?? null;
+}
+
+/**
+ * 页面在站上的地址。
+ *
+ * 开发机走 /preview/<siteId>/<path>/（本地构建的静态站），
+ * 生产机由 SITE_BASE_URL 指定域名 —— 两种都得给，不能只给一种。
+ */
+export function pageUrl(path) {
+  const base = state.siteBaseUrl || `${location.origin}/`;
+  const raw = (path || "/").trim();
+  const p = raw === "/" ? "/" : `/${raw.replace(/^\/+|\/+$/g, "")}/`;
+  if (state.siteBaseFrom === "env") return new URL(p, base).href;
+  const siteId = encodeURIComponent(state.siteId ?? "");
+  return new URL(`/preview/${siteId}${p}`, base).href;
 }

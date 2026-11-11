@@ -192,7 +192,23 @@ export function create() {
       h("h2", { style: { font: "600 22px/1.3 var(--font-display)", margin: "4px 0 4px" }, text: f.name }),
       h("p", { class: "muted", style: { fontSize: "12.5px", marginBottom: "16px" }, text: f.description || "没有说明" }),
 
-      h("div", { class: "section-label", text: `被引用的位置 · ${uses.length}` }),
+      h(
+        "div",
+        { class: "hstack gap8", style: { alignItems: "center", marginBottom: "8px" } },
+        h("span", { class: "section-label", text: `被引用的位置 · ${uses.length}` }),
+        h("span", { class: "sp" }),
+        h("button", {
+          id: "btn-fragment-highlight",
+          class: `btn btn--ghost btn--sm ${store.highlightFragmentId() === f.id ? "btn--stamp" : ""}`,
+          type: "button",
+          text: store.highlightFragmentId() === f.id ? "取消标注" : "在内容区标出",
+          title: "把用到这个组件的位置全部加框高亮",
+          onclick: () => {
+            store.setHighlightFragment(f.id);
+            paintDetail();
+          },
+        }),
+      ),
       uses.length
         ? h(
             "div",
@@ -204,13 +220,21 @@ export function create() {
                   class: "todo__row",
                   type: "button",
                   style: { border: "1px solid var(--rule)", borderRadius: "4px", background: "var(--sheet)" },
+                  title: `第 ${u.position} 块 / 共 ${u.moduleCount} 块 · ${u.moduleTitle}`,
                   onclick: () => {
                     store.select({ pageId: u.pageId, moduleId: u.moduleId });
+                    store.flashModule(u.pageId, u.moduleId);
                     go("content");
                   },
                 },
                 icon("layers", 14),
-                h("span", { class: "todo__t" }, h("span", { text: u.pageTitle }), h("small", { text: u.pagePath })),
+                h(
+                  "span",
+                  { class: "todo__t" },
+                  h("span", { text: u.pageTitle }),
+                  h("small", { text: `${u.pagePath} · 第 ${u.position} 块 · ${u.moduleTitle}` }),
+                ),
+                h("span", { class: "tag", style: { height: "15px" }, text: `${u.itemCount} 条` }),
                 icon("chevronRight", 13),
               ),
             ),

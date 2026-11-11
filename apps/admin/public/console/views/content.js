@@ -298,16 +298,23 @@ export function create(ctx) {
 
     mount(
       structBody,
-      ...mods.map((mod) => {
+      ...mods.map((mod, mi) => {
         const isSel = mod.id === store.state.sel.moduleId;
         const items = store.itemsOf(mod);
         const isFrag = !!mod.fragmentId;
+        // 组件高亮模式：所有引用同一个片段的模块都加框
+        const hl = store.highlightFragmentId();
+        const isHl = hl && mod.fragmentId === hl;
+        const fragName = isFrag ? store.fragmentById(mod.fragmentId)?.name ?? "" : "";
         return h(
           "div",
           {
-            class: `mod ${mod.id === store.state.sel.moduleId ? "mod--sel" : ""} ${mod.enabled ? "" : "mod--off"}`,
+            class: `mod ${mod.id === store.state.sel.moduleId ? "mod--sel" : ""} ${mod.enabled ? "" : "mod--off"} ${
+              isHl ? "mod--fragmark" : ""
+            }`,
             "data-drag-id": mod.id,
             draggable: "true",
+            "data-mod-id": mod.id,
           },
           h(
             "div",
@@ -318,7 +325,10 @@ export function create(ctx) {
             h("span", { class: "mod__grip" }, icon("grip", 13)),
             h("span", { class: "mod__type", text: mod.type }),
             h("span", { class: "mod__title", text: mod.title || store.MODULE_TYPE_LABEL[mod.type] || "模块" }),
-            isFrag ? h("span", { class: "tag tag--frag", text: "片段" }) : null,
+            isFrag
+              ? h("span", { class: "tag tag--frag", title: `组件「${fragName}」 · 本页第 ${mi + 1} 块`, text: "片段" })
+              : null,
+            isHl ? h("span", { class: "tag tag--frag", text: "组件位置" }) : null,
             h("span", { class: "mod__count", text: isFrag ? "引用" : String(items.length) }),
             h(
               "span",
@@ -349,15 +359,32 @@ export function create(ctx) {
             ? h(
                 "div",
                 { class: "mod__items" },
+                ...fragmentItemRows(page, mod),
                 h(
                   "div",
-                  { class: "item", style: { cursor: "default" } },
-                  h("span", { class: "item__t muted", text: "内容在片段库里，改一次全站跟着改" }),
+                  { class: "hstack", style: { padding: "5px 8px", gap: "4px" } },
+                  h("button", {
+                    class: "btn btn--ghost btn--sm",
+                    type: "button",
+                    text: "+ 本地一条",
+                    title: "只在这一处追加，不改片段本体",
+                    onclick: (e) => {
+                      e.stopPropagation();
+                      const it = store.addLocalItem(mod.id);
+                      if (it) {
+                        store.select({ pageId: page.id, moduleId: mod.id, itemId: it.id });
+                        setMode("edit");
+                      }
+                    },
+                  }),
                   h("button", {
                     class: "btn btn--ghost btn--sm",
                     type: "button",
                     text: "去组件",
-                    onclick: () => go("components"),
+                    onclick: (e) => {
+                      e.stopPropagation();
+                      go("components");
+                    },
                   }),
                 ),
               )
@@ -462,7 +489,7 @@ export function create(ctx) {
       return;
     }
     if (item && mod) {
-      paneHost.appendChild(itemEditor(page, mod, item));
+      paneHost.appendChild(mod.fragmentId ? fragmentItemEditor(page, mod, item) : itemEditor(page, mod, item));
       return;
     }
     if (mod) {
@@ -725,16 +752,21 @@ export function create(ctx) {
   }
 
   /* ── 条目编辑 ─────────────────────────────────────────── */
-  function itemEditor(page, mod, item) {
+  /**
+   * @param opts.patch 覆盖「改动落到哪儿」——
+   *   普通模块写进模块自己的 items；引用型模块写进 overrides / extraItems。
+   *   两种条目长得一样，落点不同 —— 所以把落点做成参数，而不是写两套表单。
+   */
+  function itemEditor(page, mod, item, opts = {}) {
     const pane = h("div", { class: "pane pane--pad" });
     const form = h("div", { class: "form-grid form-grid--wide" });
 
-    const patch = (p, { repaint = false } = {}) => {
+    const patch = opts.patch ?? ((p, { repaint = false } = {}) => {
       store.clearFocus({ silent: true });
       store.updateItem(mod.id, item.id, p, { quiet: !repaint });
       if (repaint) paintStruct();
       else repaintStructSoon();
-    };
+    });
 
     /* 从待办跳过来的：先说清「为什么在这、要改什么」，别让人自己找 */
     const fi = store.state.ui.focusIssue;
@@ -755,7 +787,7 @@ export function create(ctx) {
             : item.published
               ? stamp("approved")
               : tag("草稿", "draft"),
-        ...reviewControls(page, mod, item),
+        ...(opts.hideReview ? [] : reviewControls(page, mod, item)),
         h("span", { class: "sp" }),
         h(
           "label",
@@ -767,16 +799,20 @@ export function create(ctx) {
           }),
           h("span", { text: "发布这条" }),
         ),
-        h(
-          "label",
-          { class: "check", title: "同类里排最前" },
-          h("input", {
-            type: "checkbox",
-            checked: !!item.sticky,
-            onchange: (e) => patch({ sticky: e.target.checked }, { repaint: true }),
-          }),
-          h("span", { text: "置顶" }),
-        ),
+        ...(opts.origin === "fragment"
+          ? []
+          : [
+              h(
+                "label",
+                { class: "check", title: "同类里排最前" },
+                h("input", {
+                  type: "checkbox",
+                  checked: !!item.sticky,
+                  onchange: (e) => patch({ sticky: e.target.checked }, { repaint: true }),
+                }),
+                h("span", { text: "置顶" }),
+              ),
+            ]),
         h("button", {
           class: "btn btn--ghost btn--sm",
           type: "button",
@@ -788,7 +824,7 @@ export function create(ctx) {
           type: "button",
           title: "删除条目",
           "aria-label": "删除条目",
-          onclick: () => removeItem(mod, item),
+          onclick: () => (opts.onDelete ? opts.onDelete() : removeItem(mod, item)),
         }, icon("trash", 14)),
       ),
     );
@@ -858,7 +894,7 @@ export function create(ctx) {
 
     /* 卡片网格：产品要规格表，案例要客户名 + 量化结果 */
     if (t === "card-grid") {
-      const kind = mod.props?.kind ?? "products";
+      const kind = store.effectiveProps(mod).kind ?? "products";
       if (kind === "cases") {
         form.append(
           field("客户名（必填）", inputText(item.client ?? "", (v) => patch({ client: v }), { placeholder: "某城商行" })),
@@ -1062,10 +1098,171 @@ export function create(ctx) {
     return list;
   }
 
+  /* ── 引用型模块里的条目编辑 ───────────────────────────── */
+  /**
+   * 组件引入站点后的条目编辑。
+   *
+   * 表单跟普通条目**一模一样**（同一套 itemEditor），
+   * 只有「改动落到哪儿」不同：
+   *   片段里的条目 → 写 override（只改这一处）
+   *   本地追加的   → 写 extraItems
+   */
+  function fragmentItemEditor(page, mod, item) {
+    const entry = store.fragmentEntries(mod).find((e) => e.id === item.id);
+    const isLocal = entry?.origin === "local";
+
+    const patch = (p, { repaint = false } = {}) => {
+      store.clearFocus({ silent: true });
+      if (isLocal) store.updateLocalItem(mod.id, item.id, p);
+      else store.setFragmentOverride(mod.id, item.id, p);
+      if (repaint) paintStruct();
+      else repaintStructSoon();
+    };
+
+    const pane = itemEditor(page, mod, item, {
+      patch,
+      hideReview: true,
+      origin: isLocal ? "local" : "fragment",
+      onDelete: () => {
+        if (isLocal) store.deleteLocalItem(mod.id, item.id);
+        else store.hideFragmentItem(mod.id, item.id, true);
+        deskKey = "";
+        paintStruct();
+        paintDesk(true);
+      },
+    });
+
+    // 顶部补一条来源说明 —— 让人知道改的是「这一处」还是「片段本体」
+    const banner = h(
+      "div",
+      {
+        class: "form-note",
+        style: {
+          marginBottom: "12px",
+          borderLeftColor: "var(--press)",
+          background: "var(--press-soft)",
+          color: "var(--ink-2)",
+        },
+      },
+      isLocal
+        ? "这是「这一处本地追加」的条目 —— 只在这一页出现，不影响片段本体。"
+        : "这是片段里的条目。在这里改只改这一处 —— 片段本体和其他引用点不变。想全局改，去「组件」标签页。",
+    );
+    pane.insertBefore(banner, pane.firstChild);
+
+    // 底部加一排「这一处专属」的动作
+    const foot = h(
+      "div",
+      { class: "hstack gap8", style: { marginTop: "16px", flexWrap: "wrap" } },
+      h("button", {
+        class: "btn btn--ghost btn--sm",
+        type: "button",
+        text: "恢复成片段原样",
+        title: "撤掉这一处对片段的覆盖",
+        onclick: () => {
+          store.resetFragmentOverride(mod.id, item.id);
+          deskKey = "";
+          paintStruct();
+          paintDesk(true);
+        },
+      }),
+      h("button", {
+        class: "btn btn--ghost btn--sm",
+        type: "button",
+        text: isLocal ? "删掉这条" : "在这一处隐藏",
+        onclick: () => {
+          if (isLocal) store.deleteLocalItem(mod.id, item.id);
+          else store.hideFragmentItem(mod.id, item.id, true);
+          deskKey = "";
+          paintStruct();
+          paintDesk(true);
+        },
+      }),
+      h("button", {
+        class: "btn btn--ghost btn--sm",
+        type: "button",
+        text: "去组件区改本体",
+        onclick: () => go("components"),
+      }),
+    );
+    pane.appendChild(foot);
+    return pane;
+  }
+
   /* ── 模块编辑 ─────────────────────────────────────────── */
+  /**
+   * 引用型模块的条目列表 —— 显示的是「这一处实际显示的内容」。
+   *
+   * 组件引入站点后也要能增删改查：
+   *   改 → 写 override（只改这一处）
+   *   删 → hidden 覆盖（片段本体不动）
+   *   增 → 本地追加一条
+   *   查 → 这里列出来的就是片段本体 + 覆盖算出来的结果
+   */
+  function fragmentItemRows(page, mod) {
+    const entries = store.fragmentEntries(mod);
+    if (!entries.length) {
+      return [
+        h(
+          "div",
+          { class: "item", style: { cursor: "default" } },
+          h("span", { class: "item__t muted", text: "片段本体是空的 —— 去组件里加内容" }),
+        ),
+      ];
+    }
+    return entries.map((e) =>
+      h(
+        "div",
+        {
+          class: `item ${e.id === store.state.sel.itemId ? "item--sel" : ""} ${e.hidden ? "item--draft" : ""}`,
+          onclick: () => store.select({ pageId: page.id, moduleId: mod.id, itemId: e.id }),
+        },
+        e.origin === "local"
+          ? h("span", { class: "tag tag--kb", style: { height: "15px" }, text: "本地" })
+          : h("span", { class: "tag tag--frag", style: { height: "15px" }, text: "片段" }),
+        e.override
+          ? h("span", { class: "tag", style: { height: "15px" }, title: "这一处覆盖过片段本体", text: "改过" })
+          : null,
+        h("span", { class: "item__t", text: e.label }),
+        h(
+          "span",
+          { class: "hstack gap4" },
+          h("button", {
+            class: "item__x",
+            type: "button",
+            title: e.hidden ? "在这一处恢复" : "在这一处隐藏",
+            "aria-label": e.hidden ? "恢复" : "隐藏",
+            onclick: (ev) => {
+              ev.stopPropagation();
+              store.hideFragmentItem(mod.id, e.id, !e.hidden);
+              paintStruct();
+            },
+          }, icon(e.hidden ? "refresh" : "eye", 12)),
+          h("button", {
+            class: "item__x",
+            type: "button",
+            title: e.origin === "local" ? "删掉这条本地追加" : "在这一处删掉（片段本体保留）",
+            "aria-label": "删除",
+            onclick: (ev) => {
+              ev.stopPropagation();
+              if (e.origin === "local") store.deleteLocalItem(mod.id, e.id);
+              else store.hideFragmentItem(mod.id, e.id, true);
+              paintStruct();
+              deskKey = "";
+              paintDesk(true);
+            },
+          }, icon("trash", 12)),
+        ),
+      ),
+    );
+  }
+
   function moduleEditor(page, mod) {
     const pane = h("div", { class: "pane pane--pad" });
     const form = h("div", { class: "form-grid" });
+    const isFrag = !!mod.fragmentId;
+    const props = store.effectiveProps(mod);
+    const heading = store.effectiveHeading(mod);
     form.append(
       h(
         "div",
@@ -1073,9 +1270,20 @@ export function create(ctx) {
         h("span", { class: "tag", text: mod.type }),
         h("span", { class: "muted", style: { fontSize: "12px" }, text: store.MODULE_TYPE_DESC[mod.type] ?? "" }),
       ),
-      field("区块标题", inputText(mod.title ?? "", (v) => store.updateModule(mod.id, { title: v }), { placeholder: "例如：客户怎么说" })),
-      field("副标题", inputText(mod.subtitle ?? "", (v) => store.updateModule(mod.id, { subtitle: v }), { placeholder: "可选，一行说明" })),
+      field("区块标题", inputText(heading.title, (v) => store.setModuleHeading(mod.id, { title: v }), { placeholder: "例如：客户怎么说" })),
+      field("副标题", inputText(heading.subtitle, (v) => store.setModuleHeading(mod.id, { subtitle: v }), { placeholder: "可选，一行说明" })),
     );
+
+    if (isFrag) {
+      form.append(
+        h(
+          "div",
+          { class: "form-note", style: { borderLeftColor: "var(--press)", background: "var(--press-soft)" } },
+          `这一块引用的是组件「${store.fragmentById(mod.fragmentId)?.name ?? mod.fragmentId}」。` +
+            "在这里改标题、配置只影响这一处；改内容请到下面的条目列表里逐条覆盖，或去「组件」标签页改本体。",
+        ),
+      );
+    }
 
     if (mod.type === "card-grid") {
       form.append(
@@ -1085,13 +1293,13 @@ export function create(ctx) {
             "select",
             {
               class: "select",
-              onchange: (e) => store.updateModule(mod.id, { props: { ...(mod.props ?? {}), kind: e.target.value } }),
+              onchange: (e) => store.updateModuleProps(mod.id, { kind: e.target.value }),
             },
             ...[
               ["products", "产品 / 服务（要规格表）"],
               ["cases", "案例（要客户名与量化结果）"],
               ["insights", "洞察 / 文章"],
-            ].map(([v, label]) => h("option", { value: v, selected: (mod.props?.kind ?? "products") === v, text: label })),
+            ].map(([v, label]) => h("option", { value: v, selected: (props?.kind ?? "products") === v, text: label })),
           ),
           "类型决定校验规则：案例缺客户名会拦住发布。",
         ),
@@ -1133,26 +1341,44 @@ export function create(ctx) {
 
     pane.append(
       form,
-      h("div", { class: "section-label", style: { marginTop: "20px" }, text: "条目" }),
+      h("div", { class: "section-label", style: { marginTop: "20px" }, text: isFrag ? "条目（片段本体 + 本地追加）" : "条目" }),
       h(
         "div",
         { class: "stack gap4" },
-        ...store.itemsOf(mod).map((it, i) =>
-          h(
-            "button",
-            {
-              class: "item",
-              type: "button",
-              style: { border: "1px solid var(--rule)", background: "var(--sheet)", borderRadius: "4px" },
-              onclick: () => store.select({ pageId: page.id, moduleId: mod.id, itemId: it.id }),
-            },
-            h("span", { class: "mod__count", text: String(i + 1) }),
-            h("span", { class: "item__t", text: it.title || it.question || it.label || "无标题" }),
-            it.source === "kb" ? h("span", { class: "tag tag--kb", text: "知识库" }) : null,
-            it.published ? null : h("span", { class: "tag tag--draft", text: "草稿" }),
-            icon("chevronRight", 12),
-          ),
-        ),
+        ...(isFrag
+          ? store.fragmentEntries(mod).map((e, i) =>
+              h(
+                "button",
+                {
+                  class: "item",
+                  type: "button",
+                  style: { border: "1px solid var(--rule)", background: "var(--sheet)", borderRadius: "4px" },
+                  onclick: () => store.select({ pageId: page.id, moduleId: mod.id, itemId: e.id }),
+                },
+                h("span", { class: "mod__count", text: String(i + 1) }),
+                h("span", { class: "item__t", text: e.label }),
+                h("span", { class: "tag tag--frag", text: e.origin === "local" ? "本地" : "片段" }),
+                e.override ? h("span", { class: "tag", text: "改过" }) : null,
+                e.hidden ? h("span", { class: "tag tag--draft", text: "已隐藏" }) : null,
+                icon("chevronRight", 12),
+              ),
+            )
+          : store.itemsOf(mod).map((it, i) =>
+              h(
+                "button",
+                {
+                  class: "item",
+                  type: "button",
+                  style: { border: "1px solid var(--rule)", background: "var(--sheet)", borderRadius: "4px" },
+                  onclick: () => store.select({ pageId: page.id, moduleId: mod.id, itemId: it.id }),
+                },
+                h("span", { class: "mod__count", text: String(i + 1) }),
+                h("span", { class: "item__t", text: it.title || it.question || it.label || "无标题" }),
+                it.source === "kb" ? h("span", { class: "tag tag--kb", text: "知识库" }) : null,
+                it.published ? null : h("span", { class: "tag tag--draft", text: "草稿" }),
+                icon("chevronRight", 12),
+              ),
+            )),
       ),
     );
     return pane;
@@ -1538,6 +1764,23 @@ export function create(ctx) {
 
   /* ── 生命周期 ─────────────────────────────────────────── */
   paintAll();
+  scrollToFlash();
+
+  /**
+   * 从组件区跳过来时，把那一块滚到眼前并闪一下。
+   *
+   * 「这个组件被用在了哪些页面的哪些位置」——
+   * 清单说有几处，**框**说在哪。这一下就是那个框。
+   */
+  function scrollToFlash() {
+    const flash = store.state.ui.flash;
+    if (!flash) return;
+    const el = structBody.querySelector(`[data-mod-id="${flash.moduleId}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.classList.add("mod--flash");
+    setTimeout(() => el.classList.remove("mod--flash"), 2600);
+  }
 
   sortable(treeBody, ".tree__node", {
     onDrop: (from, to, after) => store.reorderPages(from, to, after),
@@ -1551,6 +1794,12 @@ export function create(ctx) {
         paintStruct();
         // 带了待办过来：强制重绘工位，让「改什么」的提示条出现
         paintDesk(!!store.state.ui.focusIssue);
+        scrollToFlash();
+        return;
+      }
+      if (reason === "flash" || reason === "highlight") {
+        paintStruct();
+        scrollToFlash();
         return;
       }
       if (reason === "check") {

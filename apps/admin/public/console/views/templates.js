@@ -10,9 +10,10 @@
  * 重新生成是更新，不是新建。生成后走「发布」上线。
  */
 
-import { h, icon, mount, toast, dialog, empty, relTime } from "../lib/dom.js";
+import { h, icon, mount, toast, dialog, drawer, empty, relTime } from "../lib/dom.js";
 import * as store from "../lib/store.js";
 import { api, ApiError } from "../lib/api.js";
+import { previewFrame } from "../lib/preview.js";
 
 export function create() {
   const el = h("div", { class: "work" });
@@ -27,6 +28,31 @@ export function create() {
   let selectedIns = null; // 当前编辑的实例
   let loading = true;
   let error = "";
+
+  /**
+   * 编辑草稿 —— **视图级**，不是编辑器局部变量。
+   *
+   * 为什么：编辑器每次重绘（保存后、切页后、任何 emit 之后）都会重建，
+   * 局部变量会被重新初始化成服务端旧值 —— 用户正打字的内容就没了。
+   * 「单价填不进去」这类症状就是这么来的：不是输入框坏了，
+   * 是**输入的值在一次重绘里被冲掉**。
+   */
+  const drafts = new Map(); // instanceId -> {name, slug, published, values}
+
+  /** 取某实例的草稿（没有就用服务端值起一份） */
+  function draftOf(ins) {
+    let d = drafts.get(ins.id);
+    if (!d) {
+      d = {
+        name: ins.name,
+        slug: ins.slug,
+        published: !!ins.published,
+        values: JSON.parse(JSON.stringify(ins.values ?? {})),
+      };
+      drafts.set(ins.id, d);
+    }
+    return d;
+  }
 
   el.append(
     head,
@@ -100,6 +126,8 @@ export function create() {
     try {
       const d = await api.updateInstance(siteId, ins.id, patch);
       Object.assign(ins, d.instance ?? patch);
+      // 草稿与服务端对齐 —— 保存后继续编辑不会看到旧值
+      drafts.delete(ins.id);
       await load();
       return true;
     } catch (e) {
@@ -205,6 +233,25 @@ export function create() {
     return (tpl?.page.pathPrefix ?? "").replace(/^\/+/, "");
   }
 
+  /** 实例生成的页面路径（站内路径） */
+  function insPath(ins) {
+    const tpl = templates.find((t) => t.id === ins.templateId);
+    if (!tpl) return "";
+    const prefix = tpl.page.pathPrefix.replace(/\/+$/, "");
+    return `${prefix}/${(ins.slug ?? "").replace(/^\/+/, "")}`;
+  }
+
+  /** 实例页面的公开网址（开发机走 /preview/<siteId>/…，生产机走站点域名） */
+  function insUrl(ins) {
+    const p = insPath(ins);
+    return p ? store.pageUrl(p) : "";
+  }
+
+  /** 模版的「样例路径」—— 结构决定了实例会生成到哪里 */
+  function tplSampleUrl(tpl) {
+    return `${tpl.page.pathPrefix.replace(/\/+$/, "")}/<slug>`;
+  }
+
   /* ── 右栏：详情（模版说明 或 实例编辑器）──────────────── */
 
   function paintDetail() {
@@ -263,6 +310,24 @@ export function create() {
             ),
           ),
         ),
+        h("div", { class: "section-label", text: "生成网址" }),
+        h(
+          "div",
+          { class: "hstack gap6", style: { marginBottom: "14px" } },
+          h("code", {
+            class: "url-chip",
+            text: `${tplSampleUrl(tpl)}`,
+            title: "实例按这个前缀生成页面 —— slug 是实例自己的",
+          }),
+          h("button", {
+            id: "btn-tpl-preview",
+            class: "btn btn--ghost btn--sm",
+            type: "button",
+            text: "看结构预览",
+            title: "按模版布局画一遍骨架 —— 不依赖实例内容",
+            onclick: () => showStructurePreview(tpl),
+          }),
+        ),
         h("div", { class: "section-label", text: `实例 · ${ins.length}` }),
         ins.length
           ? h("div", { class: "frag-usage" },
@@ -278,7 +343,21 @@ export function create() {
                   },
                 },
                 icon("layers", 14),
-                h("span", { class: "todo__t" }, h("span", { text: i.name }), h("small", { text: `${tpl.page.pathPrefix}/${i.slug}` })),
+                h("span", { class: "todo__t" },
+                  h("span", { text: i.name }),
+                  h("small", { text: insPath(i) || "（未设 slug）" }),
+                ),
+                i.generatedPageId
+                  ? h("code", {
+                      class: "url-chip",
+                      text: insUrl(i),
+                      title: "点击复制这个网址",
+                      onclick: (e) => {
+                        e.stopPropagation();
+                        void copyUrl(insUrl(i));
+                      },
+                    })
+                  : null,
                 icon("chevronRight", 13),
               ),
             ),
@@ -301,10 +380,11 @@ export function create() {
       return;
     }
 
-    const draftName = { value: ins.name };
-    const draftSlug = { value: ins.slug };
-    const draftValues = { value: JSON.parse(JSON.stringify(ins.values ?? {})) };
-    const draftPublished = { value: !!ins.published };
+    const draft = draftOf(ins);
+    const draftName = { value: draft.name };
+    const draftSlug = { value: draft.slug };
+    const draftValues = { value: draft.values };
+    const draftPublished = { value: draft.published };
 
     const collect = () => ({
       name: draftName.value.trim(),
@@ -317,7 +397,9 @@ export function create() {
     function fieldEditor(field) {
       const v = draftValues.value[field.key];
       if (field.type === "metrics") {
-        const rows = Array.isArray(v) ? v : [];
+        // rows 必须**挂在草稿上** —— 不然改的是个临时数组，
+        // 一次重绘就没了（这正是「指标填不进去」的根因）。
+        const rows = Array.isArray(v) ? v : (draftValues.value[field.key] = []);
         const host = h("div", { class: "stack", style: { gap: "6px" } });
         const paint = () => {
           mount(host, ...rows.map((m, i) =>
@@ -436,6 +518,20 @@ export function create() {
           h("span", { class: "tag", text: tpl.name }),
           h("span", { class: "muted", style: { fontSize: "11.5px" }, text: `更新于 ${relTime(ins.updatedAt)}` }),
           h("span", { class: "sp" }),
+          h("code", {
+            class: "url-chip",
+            text: insUrl(ins),
+            title: "点击复制网址",
+            onclick: () => void copyUrl(insUrl(ins)),
+          }),
+          h("button", {
+            id: "btn-instance-preview",
+            class: "btn btn--ghost btn--sm",
+            type: "button",
+            text: "预览",
+            title: "按当前内容渲染这个页面（草稿预览，未发布也看得到）",
+            onclick: () => showInstancePreview(ins),
+          }),
           ins.generatedPageId
             ? h("button", {
                 id: "btn-instance-regenerate",
@@ -635,6 +731,111 @@ export function create() {
         }
       }, 200);
     });
+  }
+
+  /** 复制网址到剪贴板 */
+  async function copyUrl(url) {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("已复制：" + url, { kind: "ok" });
+    } catch {
+      toast(url, { timeout: 6000 });
+    }
+  }
+
+  /**
+   * 模版的结构预览 —— 按布局块画一遍骨架。
+   * 不依赖实例内容：看的是「这个模版会生成什么样的页面」。
+   */
+  function showStructurePreview(tpl) {
+    const body = h("div", { class: "stack", style: { gap: "10px" } });
+    const KIND = {
+      heading: "英雄区（标题 + 引导语）",
+      text: "富文本正文块",
+      metrics: "量化指标条",
+      bullets: "要点列表",
+      cta: "行动号召条",
+    };
+    for (const b of tpl.page.blocks ?? []) {
+      const fieldLabel = b.field
+        ? tpl.fields.find((f) => f.key === b.field)?.label ?? b.field
+        : null;
+      body.appendChild(
+        h(
+          "div",
+          { class: "hstack gap6", style: { alignItems: "center" } },
+          h("span", { class: "tag", text: KIND[b.kind] ?? b.kind }),
+          fieldLabel ? h("span", { class: "muted", style: { fontSize: "12px" }, text: `用字段「${fieldLabel}」` }) : null,
+          b.title ? h("span", { class: "muted", style: { fontSize: "12px" }, text: `区块标题：${b.title}` }) : null,
+        ),
+      );
+    }
+    drawer({
+      title: `结构预览 · ${tpl.name}`,
+      subtitle: `实例会生成到 ${tplSampleUrl(tpl)}`,
+      body,
+      width: "520px",
+    });
+  }
+
+  /**
+   * 实例预览 —— 按当前填的内容渲染这个页面。
+   *
+   * 用的是**编排里的生成页**（草稿态），所以未发布也能看；
+   * 已发布的话上面的「网址」才是访客看到的地址。
+   */
+  function showInstancePreview(ins) {
+    const page = (store.state.plan?.pages ?? []).find((p) => p.generatedFrom === ins.id);
+    const draft = draftOf(ins);
+    // 草稿内容还没进编排时，用草稿临时拼一个页面出来
+    const previewPage = page ?? buildDraftPage(ins, draft);
+    const frame = previewFrame({
+      getPage: () => previewPage,
+      getAppearance: () => store.state.plan?.appearance ?? {},
+      getNav: () => store.pages(),
+      siteId: store.state.siteId,
+      siteName: store.state.sites.find((s) => s.id === store.state.siteId)?.name ?? "",
+    });
+    drawer({
+      title: `预览 · ${ins.name}`,
+      subtitle: insUrl(ins),
+      // frame 是 {el, iframe, paint} —— 塞进抽屉的是**元素**，不是那包东西
+      body: h("div", { style: { padding: "0" } }, frame.el),
+      width: "880px",
+    });
+    // 抽屉打开后刷新一次预览（iframe 需要在 DOM 里才有尺寸）
+    setTimeout(() => frame.paint?.(), 60);
+  }
+
+  /** 用草稿拼一个页面（实例还没生成进编排时用） */
+  function buildDraftPage(ins, draft) {
+    const tpl = templates.find((t) => t.id === ins.templateId);
+    if (!tpl) return null;
+    const mods = [];
+    for (const b of tpl.page.blocks ?? []) {
+      const v = draft.values[b.field];
+      if (b.kind === "heading") {
+        mods.push({ id: "d_hero", type: "hero", title: "", items: [{ id: "d_i", source: "manual", title: draft.name, summary: String(v ?? "").split("\n")[0] ?? "", order: 0, published: true }] });
+      } else if (b.kind === "text") {
+        mods.push({ id: "d_text", type: "rich-text", title: b.title ?? "", items: [{ id: "d_i", source: "manual", title: "", body: { type: "doc", content: String(v ?? "").split("\n").filter(Boolean).map((line) => ({ type: "paragraph", content: [{ type: "text", text: line }] })) }, order: 0, published: true }] });
+      } else if (b.kind === "metrics") {
+        const arr = Array.isArray(v) ? v : [];
+        mods.push({ id: "d_stats", type: "stats", title: b.title ?? "", items: arr.map((m, i) => ({ id: "d_i" + i, source: "manual", value: m.value, unit: m.unit, label: m.label ?? "", order: i, published: true })) });
+      } else if (b.kind === "bullets") {
+        const arr = Array.isArray(v) ? v : [];
+        mods.push({ id: "d_bul", type: "rich-text", title: b.title ?? "", items: [{ id: "d_i", source: "manual", title: "", body: { type: "doc", content: arr.map((line) => ({ type: "paragraph", content: [{ type: "text", text: "· " + line }] })) }, order: 0, published: true }] });
+      } else if (b.kind === "cta") {
+        mods.push({ id: "d_cta", type: "cta", title: b.title ?? "想聊聊？", items: [{ id: "d_i", source: "manual", title: b.title ?? "想聊聊？", href: "/contact", order: 0, published: true }] });
+      }
+    }
+    return {
+      id: "draft_page",
+      path: insPath(ins),
+      title: draft.name,
+      description: "",
+      modules: mods,
+    };
   }
 
   function slugify(s) {

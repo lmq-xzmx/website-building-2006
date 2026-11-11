@@ -103,6 +103,11 @@ export function resolveFragmentModule(
     items.push(applyItemOverride(clone(item), io));
   }
 
+  // 引用点本地追加的条目 —— 只在这一处出现，不进片段本体。
+  for (const extra of module.extraItems ?? []) {
+    items.push(clone(extra));
+  }
+
   return {
     ...module,
     type: fragment.type,

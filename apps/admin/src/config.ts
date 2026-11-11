@@ -117,6 +117,47 @@ export interface SiteInfo {
   outStale: boolean;
 }
 
+/**
+ * 已构建站点里的页面清单 —— 目录里每一项就是一个可访问的地址。
+ *
+ * 为什么后台要自己扫一遍：
+ *   编排（modules.json）只管**后台生成的页面**（含模版实例生成的），
+ *   但站点还有一批来自内容包 site.ts 的固定页（/about、/cases…）——
+ *   那些页在 out/ 里，但不在编排里。
+ *   「页面清单」要给的是**站点的全部地址**，漏掉一半就等于没给。
+ */
+export async function listBuiltPages(siteId: string): Promise<string[]> {
+  const { readdir, stat } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const outDir = join(SITES_DIR, siteId, "out");
+  try {
+    await stat(join(outDir, "index.html"));
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  let entries;
+  try {
+    entries = await readdir(outDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    // 以 . 或 _ 开头的不是页面（_next 是构建产物，_geo 是内部目录）
+    if (e.name.startsWith(".") || e.name.startsWith("_")) continue;
+    // 404 是错误页，不是内容页 —— 放进「页面清单」是噪音
+    if (e.name === "404") continue;
+    try {
+      await stat(join(outDir, e.name, "index.html"));
+    } catch {
+      continue;
+    }
+    out.push(`/${e.name}/`);
+  }
+  return out.sort();
+}
+
 export async function listSites(): Promise<SiteInfo[]> {
   const { readdir, readFile, stat } = await import("node:fs/promises");
   const { join } = await import("node:path");

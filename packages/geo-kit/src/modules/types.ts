@@ -246,6 +246,17 @@ export interface PageModule {
   order: number;
   /** 是否启用。false = 整块下线 */
   enabled: boolean;
+  /**
+   * 本地追加的条目 —— 只在这一处出现，不进片段本体。
+   *
+   * 为什么需要：引用型模块（fragmentId）的条目来自片段，
+   * 覆盖（overrides）只能改/藏片段里已有的条目 ——
+   * 「这一处要多一条」表达不了。
+   *
+   * 典型场景：页脚那块「联系我们」是公共片段，
+   * 但某个页面还要多列一个「合作邮箱」—— 只在这一页有。
+   */
+  extraItems?: ModuleItem[];
   /** 定时发布 —— ISO 时间串，未到不生效 */
   publishAt?: string;
   /** 置顶 —— 同页面里排最前 */

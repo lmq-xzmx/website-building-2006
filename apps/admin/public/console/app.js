@@ -7,8 +7,8 @@
  *   lib/store  唯一的状态来源
  */
 
-import { h, icon, mount, clear, toast, dialog, relTime } from "./lib/dom.js";
-import { ApiError } from "./lib/api.js";
+import { h, icon, mount, clear, toast, dialog, drawer, empty, relTime } from "./lib/dom.js";
+import { ApiError, api } from "./lib/api.js";
 import { VIEWS, go, onRoute, parseHash, start as startRouter, currentView } from "./lib/router.js";
 import * as store from "./lib/store.js";
 
@@ -68,7 +68,7 @@ async function boot() {
       );
       return;
     }
-    await Promise.all([store.loadPlan(), store.loadKb()]);
+    await Promise.all([store.loadPlan(), store.loadKb(), store.loadFragments()]);
     store.pruneSelection();
     store.emit("boot");
     updateChrome();
@@ -127,6 +127,7 @@ async function loadSiteData() {
   try {
     await store.loadPlan();
     await store.loadKb();
+    await store.loadFragments();
     store.pruneSelection();
     store.emit("plan");
     void store.runCheck({ silent: true });
@@ -282,6 +283,19 @@ function updateTopbar() {
     h(
       "button",
       {
+        id: "topbar-pages",
+        class: "btn btn--ghost btn--sm",
+        type: "button",
+        title: "页面清单 —— 每个页面的网址都在这儿",
+        onclick: openPageMap,
+      },
+      icon("link", 14),
+      h("span", { text: "页面清单" }),
+    ),
+
+    h(
+      "button",
+      {
         id: "topbar-search",
         class: "btn btn--ghost btn--sm",
         type: "button",
@@ -323,6 +337,130 @@ function updateTopbar() {
 }
 
 /* ── 站点切换 / 用户菜单 ───────────────────────────────── */
+
+/**
+ * 页面清单 —— 每个页面在站上的网址。
+ *
+ * 为什么单开一个入口，而不是挂在站点切换按钮下：
+ *   站点切换按钮是**换站点**的，网址清单是**看这个站有什么页面**的 ——
+ *   两个不同的意图塞进一个按钮，菜单会变成两件事的混合体。
+ *   而且站点只有一个时，切换按钮几乎不用，网址却天天要抄。
+ */
+async function openPageMap() {
+  const pages = store.pages();
+  const fromEnv = store.state.siteBaseFrom === "env";
+  const urlOf = (path) => store.pageUrl(path);
+
+  // 编排之外的固定页（/about、/cases…）不在 modules.json 里 ——
+  // 从构建产物扫出来，否则清单只给一半地址。
+  let built = [];
+  try {
+    const d = await api.sitePages(store.state.siteId);
+    built = d.pages ?? [];
+  } catch {
+    built = [];
+  }
+  const planned = new Set(pages.map((p) => (p.path || "/").replace(/\/+$/, "") || "/"));
+  const extra = built.filter((p) => !planned.has(p.replace(/\/+$/, "") || "/"));
+
+  const body = h("div", { class: "stack gap10" });
+  if (!pages.length && !extra.length) {
+    body.appendChild(empty({ title: "这个站点还没有页面", text: "去内容区建一页。", mark: "file" }));
+  } else {
+    for (const p of pages) {
+      const url = urlOf(p.path);
+      body.appendChild(
+        h(
+          "div",
+          {
+            style: {
+              border: "1px solid var(--rule)",
+              borderRadius: "4px",
+              background: "var(--sheet)",
+              padding: "9px 11px",
+            },
+          },
+          h(
+            "div",
+            { class: "hstack gap8" },
+            h("span", { style: { fontSize: "13px", fontWeight: "500" }, text: p.title || "未命名页面" }),
+            p.published ? null : h("span", { class: "tag tag--draft", text: "草稿" }),
+            p.generatedFrom ? h("span", { class: "tag tag--frag", text: "模版生成" }) : null,
+            h("span", { class: "sp" }),
+            h("code", {
+              class: "url-chip",
+              text: url,
+              title: "点击复制网址",
+              onclick: () => void copyText(url),
+            }),
+            h("button", {
+              class: "btn btn--ghost btn--icon btn--sm",
+              type: "button",
+              title: "在新标签打开",
+              "aria-label": "打开这一页",
+              onclick: () => window.open(url, "_blank", "noopener"),
+            }, icon("external", 13)),
+          ),
+          h("div", { class: "mono muted", style: { fontSize: "11.5px", marginTop: "3px" }, text: p.path || "/" }),
+        ),
+      );
+    }
+    for (const path of extra) {
+      const url = urlOf(path);
+      body.appendChild(
+        h(
+          "div",
+          {
+            style: {
+              border: "1px solid var(--rule)",
+              borderRadius: "4px",
+              background: "var(--sheet)",
+              padding: "9px 11px",
+            },
+          },
+          h(
+            "div",
+            { class: "hstack gap8" },
+            h("span", { style: { fontSize: "13px", fontWeight: "500" }, text: path }),
+            h("span", { class: "tag", title: "这一页来自内容包，不在后台编排里", text: "内容包" }),
+            h("span", { class: "sp" }),
+            h("code", {
+              class: "url-chip",
+              text: url,
+              title: "点击复制网址",
+              onclick: () => void copyText(url),
+            }),
+            h("button", {
+              class: "btn btn--ghost btn--icon btn--sm",
+              type: "button",
+              title: "在新标签打开",
+              "aria-label": "打开这一页",
+              onclick: () => window.open(url, "_blank", "noopener"),
+            }, icon("external", 13)),
+          ),
+        ),
+      );
+    }
+  }
+
+  drawer({
+    title: "页面清单",
+    subtitle: fromEnv ? "这些是站点上的正式网址" : "这些是本地预览网址（/preview/…）—— 发布到生产后域名会变",
+    body,
+    width: "620px",
+  });
+}
+
+async function copyText(text) {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("已复制：" + text, { kind: "ok" });
+  } catch {
+    toast(text, { timeout: 6000 });
+  }
+}
+
 function siteMenu(anchor) {
   const rect = anchor.getBoundingClientRect();
   const pop = h(

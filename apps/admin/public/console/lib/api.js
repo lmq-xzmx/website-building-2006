@@ -64,6 +64,8 @@ export const api = {
   kbItem: (id) => request(`/api/kb/item/${enc(id)}`),
 
   modules: (site) => request(`/api/sites/${enc(site)}/modules`),
+  /** 已构建站点里的页面地址（编排外的固定页也在里面） */
+  sitePages: (site) => request(`/api/sites/${enc(site)}/pages`),
   saveModules: (site, plan) => request(`/api/sites/${enc(site)}/modules`, { method: "PUT", body: plan }),
   previewModules: (site, plan) =>
     request(`/api/sites/${enc(site)}/modules/preview`, { method: "POST", body: plan }),

@@ -199,6 +199,32 @@ describe("片段：引用展开", () => {
     expect(resolved.items[0].id).toBe("it1");
   });
 
+  it("引用点本地追加的条目：只在这一处出现，不进片段本体", () => {
+    const m: PageModule = {
+      id: "mod1",
+      type: "rich-text",
+      items: [],
+      order: 0,
+      enabled: true,
+      fragmentId: "fg1",
+      extraItems: [
+        {
+          id: "local1",
+          source: "manual",
+          title: "这一页特有的补充",
+          order: 0,
+          published: true,
+        },
+      ],
+    };
+    const map = new Map([["fg1", frag()]]);
+    const resolved = resolveFragmentModule(m, map.get("fg1"));
+    expect(resolved.items).toHaveLength(3);
+    expect(resolved.items[2].title).toBe("这一页特有的补充");
+    // 片段本体一个字都没动
+    expect(map.get("fg1")?.items).toHaveLength(2);
+  });
+
   it("片段不存在时展开不炸 —— 真正的拦截在校验", () => {
     const m: PageModule = {
       id: "mod1",

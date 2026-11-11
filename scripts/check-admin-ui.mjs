@@ -111,6 +111,41 @@ for (const rel of seen) {
   }
 }
 
+/* ── 6. 有没有用了却没导入的名字 ─────────────────────────── */
+//
+// 踩过的坑：app.js 调了 drawer()，忘了从 lib/dom.js 导入 ——
+// 语法完全合法，自检全绿，浏览器里一点就报 ReferenceError。
+// 静态检查必须能抓这一类：名字在文件里被**引用**，但既没导入也没定义。
+//
+// 用 TypeScript 的检查器做这件事（后台零构建，但仓库里有 typescript）：
+// 只取「找不到这个名字」这一类诊断，别的一概不报。
+{
+  const ts = await import("typescript");
+  const jsFiles = [];
+  for (const rel of seen) {
+    if (!rel.endsWith(".js")) continue;
+    jsFiles.push(resolve(consoleDir, rel));
+  }
+  const program = ts.createProgram(jsFiles, {
+    allowJs: true,
+    checkJs: true,
+    noEmit: true,
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    lib: ["lib.es2022.d.ts", "lib.dom.d.ts"],
+    skipLibCheck: true,
+  });
+  for (const d of ts.getPreEmitDiagnostics(program)) {
+    if (d.code !== 2304 && d.code !== 2552 && d.code !== 2554) continue;
+    if (!d.file || d.start === undefined) continue;
+    const { line } = d.file.getLineAndCharacterOfPosition(d.start);
+    const rel = d.file.fileName.slice(consoleDir.length + 1);
+    problems.push(`${rel}:${line + 1} ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`);
+  }
+  notes.push(`名字检查：${jsFiles.length} 个文件，用到但没导入的名字 0 个`);
+}
+
 /* ── 结果 ─────────────────────────────────────────────── */
 for (const n of notes) console.log(`  · ${n}`);
 if (problems.length) {

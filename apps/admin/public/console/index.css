@@ -423,6 +423,20 @@ svg { display: block; }
 }
 .mod--off { opacity: .55; }
 .mod--sel { border-color: var(--ink-2); box-shadow: 0 0 0 1px var(--ink-2); }
+/* 组件位置标注：用到同一个片段的模块加框 —— 「在哪些位置」看得见 */
+.mod--fragmark {
+  border-color: var(--press);
+  box-shadow: 0 0 0 2px var(--press-soft), 0 0 0 1px var(--press);
+  background: var(--press-soft);
+}
+/* 从组件区跳过来时闪一下 —— 目光不用自己找 */
+.mod--flash {
+  animation: modFlash 2.4s ease-out;
+}
+@keyframes modFlash {
+  0%, 22% { box-shadow: 0 0 0 3px var(--stamp), 0 0 0 6px var(--stamp-soft); }
+  100% { box-shadow: 0 0 0 0 rgba(176, 58, 43, 0); }
+}
 .mod__head {
   display: flex; align-items: center; gap: 6px;
   padding: 7px 8px 6px;
@@ -1178,4 +1192,27 @@ svg { display: block; }
   .rail, .topbar, .split__col--tree, .split__col--struct, .tabs { display: none; }
   body { background: #fff; }
   #app { display: block; height: auto; }
+}
+
+/* ── 网址 chip ─────────────────────────────────────────────
+   模版/实例的公开网址 —— 可复制、可点开。
+   用等宽字体，让人一眼看出这是路径不是按钮。 */
+.url-chip {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--sheet-sunk);
+  border: 1px solid var(--rule);
+  color: var(--ink-3);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.url-chip:hover {
+  color: var(--ink);
+  border-color: var(--stamp);
 }

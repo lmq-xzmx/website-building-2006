@@ -73,7 +73,7 @@ import {
   type TemplateInstance,
 } from "@geokit/geo-kit";
 
-import { DATABASE_URL, HAS_DB, HOST, PORT, SITE_BASE_URL, SITES_DIR, listSites } from "./config.ts";
+import { DATABASE_URL, HAS_DB, HOST, PORT, SITE_BASE_URL, SITES_DIR, listBuiltPages, listSites } from "./config.ts";
 import { rebuildSite } from "./build.ts";
 import { writeFile, rm } from "node:fs/promises";
 import {
@@ -463,6 +463,22 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         siteBaseUrl: `${origin}/`,
         siteBaseFrom: fromEnv ? "env" : "request",
       });
+      return;
+    }
+
+    // GET /api/sites/:id/pages —— 已构建站点里的页面地址
+    //
+    // 「页面清单」要给的是**站点的全部地址**：
+    // 编排里的页面（后台管的）+ 内容包里的固定页（/about、/cases…）。
+    // 后者不在编排里，只能从构建产物 out/ 扫出来。
+    const sitePages = path.match(/^\/api\/sites\/([^/]+)\/pages$/);
+    if (req.method === "GET" && sitePages) {
+      const dir = siteDir(sitePages[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      json(res, 200, { pages: await listBuiltPages(sitePages[1]) });
       return;
     }
 
