@@ -15,47 +15,71 @@
 
 export const MODULE_PANEL_HTML = `
 <section id="modulePane" class="module-pane" hidden>
-  <aside class="mod-pages">
+  <aside class="mod-pages" data-col="pages">
     <div class="pane-head">
       <h2>页面</h2><span class="sp"></span>
+      <button class="col-toggle" data-toggle-col="pages" title="折叠/展开">⟨</button>
       <button id="modAddPage">+ 新页</button>
     </div>
     <div class="pane-body" id="modPageList"></div>
   </aside>
 
-  <aside class="mod-modules">
+  <aside class="mod-modules" data-col="modules">
     <div class="pane-head">
       <h2>模块</h2><span class="sp"></span>
       <select id="modFragSel" title="插入一个片段引用"><option value="">插片段…</option></select>
       <button id="modAddFragment">插入</button>
       <button id="modAddModule">+ 加模块</button>
+      <button class="col-toggle" data-toggle-col="modules" title="折叠/展开">⟨</button>
     </div>
     <div class="pane-body" id="modModuleList"></div>
   </aside>
 
-  <aside class="mod-items">
+  <aside class="mod-items" data-col="items">
     <div class="pane-head">
       <h2>条目</h2><span class="sp"></span>
       <button id="modAddManual">+ 手工新建</button>
       <span class="count" id="modItemCount"></span>
+      <button class="col-toggle" data-toggle-col="items" title="折叠/展开">⟨</button>
     </div>
     <div class="pane-body" id="modItemList"></div>
   </aside>
 
-  <aside class="mod-edit">
+  <aside class="mod-edit" data-col="edit">
     <div class="pane-head">
       <h2>编辑</h2><span class="sp"></span>
+      <button id="modPreview" title="预览当前草稿将发布的内容（不落盘）">预览</button>
       <button id="modSave">保存编排</button>
       <button id="modPublish" class="primary">发布并重建</button>
     </div>
     <div class="pane-body" id="modEditor"></div>
   </aside>
 
-  <aside class="mod-look">
-    <div class="pane-head"><h2>外观</h2></div>
+  <aside class="mod-look" data-col="look">
+    <div class="pane-head">
+      <h2>外观</h2>
+      <button class="col-toggle" data-toggle-col="look" title="折叠/展开">⟩</button>
+    </div>
     <div class="pane-body" id="modLook"></div>
   </aside>
 </section>
+
+<!-- 发布预览（草稿将上线什么，不落盘） -->
+<div class="pv-scrim" id="pvScrim" hidden>
+  <div class="pv-modal" role="dialog" aria-label="发布预览">
+    <div class="pv-head">
+      <h2>发布预览</h2>
+      <span class="pv-badge" id="pvBadge">草稿</span>
+      <span class="sp"></span>
+      <button id="pvClose">关闭</button>
+    </div>
+    <div class="pv-summary" id="pvSummary"></div>
+    <div class="pv-body">
+      <aside class="pv-nav" id="pvPages"></aside>
+      <div class="pv-content" id="pvDetail"></div>
+    </div>
+  </div>
+</div>
 `;
 
 /** 面板的样式 */
@@ -65,19 +89,31 @@ export const MODULE_PANEL_CSS = `
 .review-state { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--panel-2); color: var(--dim); border: 1px solid var(--line); }
 .review-state.pending { color: var(--warn); border-color: var(--warn); }
 .review-state.approved { color: var(--ok); border-color: var(--ok); }
-.review-state.rejected { color: var(err); border-color: var(--err); }
+.review-state.rejected { color: var(--err); border-color: var(--err); }
 
 .module-pane {
   flex: 1; display: grid;
-  grid-template-columns: 200px 230px 270px 1fr 240px;
+  grid-template-columns: var(--c-pages, 200px) var(--c-modules, 230px) var(--c-items, 270px) 1fr var(--c-look, 240px);
   min-height: 0; overflow: hidden;
 }
 .module-pane[hidden] { display: none; }
 .module-pane > aside {
   border-right: 1px solid var(--line);
   display: flex; flex-direction: column; min-height: 0; min-width: 0;
+  transition: flex-basis .2s, width .2s;
 }
 .module-pane > aside:last-child { border-right: none; }
+/* 折叠：把对应列宽压成 0（内容溢出隐藏） */
+.module-pane.off-pages { --c-pages: 0px; }
+.module-pane.off-modules { --c-modules: 0px; }
+.module-pane.off-items { --c-items: 0px; }
+.module-pane.off-look { --c-look: 0px; }
+.module-pane > aside { overflow: hidden; }
+.col-toggle {
+  border: none; background: transparent; color: var(--dim-2); cursor: pointer;
+  padding: 2px 6px; font-size: 12px; border-radius: 4px;
+}
+.col-toggle:hover { color: var(--text); background: var(--panel-3); }
 .mod-pages .pane-body, .mod-modules .pane-body,
 .mod-items .pane-body, .mod-edit .pane-body,
 .mod-look .pane-body {
@@ -99,18 +135,19 @@ export const MODULE_PANEL_CSS = `
   width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0;
   border: 1px solid var(--line);
 }
-.look-opt.on { border-color: var(--accent); background: var(--panel-2); }
+.look-opt.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: var(--ring); }
 .look-opt .desc { color: var(--dim); font-size: 11px; display: block; }
 .look-field { margin-bottom: 8px; }
 .look-field label { font-size: 11px; color: var(--dim); display: block; margin-bottom: 3px; }
 .look-field input, .look-field select { width: 100%; box-sizing: border-box; font-size: 12px; }
 .mrow {
-  border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 6px 8px; margin-bottom: 6px; background: var(--panel);
-  cursor: pointer;
+  border: 1px solid var(--line-soft); border-radius: var(--radius);
+  padding: 8px 10px; margin-bottom: 6px; background: var(--panel);
+  cursor: pointer; box-shadow: var(--shadow-sm);
+  transition: border-color .15s, transform .12s, box-shadow .15s;
 }
-.mrow:hover { border-color: #39414f; }
-.mrow.sel { border-color: var(--accent); background: var(--panel-2); }
+.mrow:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.mrow.sel { border-color: var(--accent); background: var(--accent-soft); box-shadow: var(--ring); }
 .mrow .t { font-size: 13px; font-weight: 500; margin-bottom: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mrow .m { color: var(--dim); font-size: 11px; display: flex; gap: 6px;
@@ -155,6 +192,57 @@ export const MODULE_PANEL_CSS = `
   content: "（空段落）"; color: var(--dim);
 }
 .eblock-move, .eblock-del { padding: 2px 0; font-size: 12px; }
+
+/* ── 发布预览弹窗 ─────────────────────────────── */
+.pv-scrim {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center; z-index: 200; padding: 24px;
+}
+.pv-scrim[hidden] { display: none; }
+.pv-modal {
+  width: min(1080px, 96vw); height: min(720px, 92vh);
+  background: var(--panel-1); border-radius: 12px; border: 1px solid var(--line);
+  display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.4);
+}
+.pv-head {
+  display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.pv-head h2 { font-size: 14px; }
+.pv-badge {
+  font-size: 11px; padding: 2px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+}
+.pv-summary {
+  padding: 8px 16px; font-size: 12px; color: var(--dim-2);
+  border-bottom: 1px solid var(--line); background: var(--panel-2);
+}
+.pv-summary b { color: var(--text); }
+.pv-summary .err { color: var(--err); }
+.pv-body { flex: 1; display: grid; grid-template-columns: 240px 1fr; min-height: 0; }
+.pv-nav { border-right: 1px solid var(--line); overflow: auto; padding: 8px; }
+.pv-nav-item {
+  display: block; width: 100%; text-align: left; padding: 7px 10px; margin: 1px 0;
+  border: none; background: transparent; color: var(--text); cursor: pointer;
+  border-radius: 6px; font-size: 12.5px;
+}
+.pv-nav-item:hover { background: var(--panel-3); }
+.pv-nav-item.active { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.pv-nav-item small { display: block; color: var(--dim); font-size: 11px; }
+.pv-content { overflow: auto; padding: 16px; }
+.pv-page-title { font-size: 18px; margin: 0 0 4px; }
+.pv-page-path { color: var(--accent); font-size: 12px; margin-bottom: 16px; }
+.pv-mod { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+.pv-mod-head {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: var(--panel-2); font-size: 12.5px;
+}
+.pv-mod-type { color: var(--accent); font-size: 11px; padding: 1px 6px; border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.pv-item { padding: 7px 12px 7px 24px; font-size: 12.5px; border-top: 1px solid var(--line); }
+.pv-item small { color: var(--dim); }
+.pv-empty { color: var(--dim); padding: 24px; text-align: center; }
 `;
 
 export const MODULE_PANEL_SCRIPT = `
@@ -275,6 +363,7 @@ async function loadModules() {
   const d = await r.json();
   modPlan = d.plan ?? { version: 1, siteId, kbId: "default", updatedAt: "", pages: [] };
   modStats = d.stats ?? null;
+  refreshChips();
   // 片段表一起拿 —— 引用/脱离/存为片段都要用
   if (d.fragments) window.geoFragments = d.fragments;
   await loadFragments();
@@ -284,6 +373,40 @@ async function loadModules() {
     curItemId = null;
   }
   renderModules();
+  // 异步拉一次校验问题数（不阻塞渲染）
+  refreshProblems();
+}
+
+/** 本地算待审核数 + 组装 chips 数据 */
+function pendingCount() {
+  let n = 0;
+  for (const p of modPlan?.pages ?? [])
+    for (const m of p.modules ?? [])
+      for (const it of m.items ?? [])
+        if (it.review === "pending") n++;
+  return n;
+}
+
+function refreshChips(problemsCount) {
+  if (!window.__setChips || !modStats) return;
+  window.__setChips({
+    pages: modStats.pages, modules: modStats.modules, items: modStats.items,
+    draftItems: modStats.draftItems, pending: pendingCount(),
+    problems: problemsCount, updatedAt: modPlan?.updatedAt,
+  });
+}
+
+/** 调一次预览接口拿校验问题数（不上屏，只喂 chips） */
+async function refreshProblems() {
+  if (!siteId || !modPlan) return;
+  try {
+    const r = await fetch("/api/sites/" + encodeURIComponent(siteId) + "/modules/preview", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(modPlan),
+    });
+    const d = await r.json();
+    refreshChips((d.problems ?? []).filter((p) => p.level === "error" || p.level === "warn").length);
+  } catch { /* chips 拉不到不阻塞 */ }
 }
 
 function renderModules() {
@@ -823,6 +946,13 @@ function bindModulePanel() {
     if (el) el.addEventListener(ev, fn);
   };
 
+  // 折叠/展开侧栏列（页面/模块/条目/外观）—— 编辑区太挤时给它腾地方
+  const pane = document.getElementById("modulePane");
+  pane.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-toggle-col]");
+    if (!t) return;
+    pane.classList.toggle("off-" + t.dataset.toggleCol);
+  });
   // 页面列表
   on("modPageList", "click", (e) => {
     const t = e.target;
@@ -1329,6 +1459,7 @@ function bindModulePanel() {
     const d = await r.json();
     if (d.error) { toast(d.error, true); return; }
     modStats = d.stats;
+    refreshChips();
     toast("编排已保存 → modules.json");
   });
 
@@ -1340,12 +1471,94 @@ function bindModulePanel() {
     pubBtn.title = "你的角色没有发布权限";
   }
 
+  // ── 发布预览 ──────────────────────────────────────
+  //
+  // 调 /modules/preview（物化但不落盘），把"当前草稿将发布什么"
+  // 渲染成一个只读预览：左侧页面、右侧模块/条目、顶部问题与跳过。
+  // 让用户在点「发布并重建」前先核对一遍。
+  let previewPages = [];
+  function openPreview() {
+    if (!siteId) return;
+    const scrim = $("pvScrim");
+    const detail = $("pvDetail");
+    const nav = $("pvPages");
+    $("pvSummary").innerHTML = "正在物化当前编排…";
+    nav.innerHTML = ""; detail.innerHTML = "";
+    scrim.hidden = false;
+    fetch("/api/sites/" + encodeURIComponent(siteId) + "/modules/preview", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(modPlan),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        previewPages = d.pages ?? [];
+        const problems = d.problems ?? [];
+        const skipped = d.skipped ?? [];
+        const errs = problems.filter((p) => p.level !== "info");
+        let sum = "将发布 <b>" + previewPages.length + "</b> 个页面";
+        if (errs.length) sum += ' · <span class="err">问题 <b>' + errs.length + "</b></span>";
+        if (skipped.length) sum += ' · <span class="err">跳过 <b>' + skipped.length + "</b> 条（知识库已删）</span>";
+        if (d.stats) sum += " · 模块 <b>" + d.stats.modules + "</b> · 条目 <b>" + d.stats.items + "</b>";
+        sum += " —— 这是草稿预览，未写盘";
+        $("pvSummary").innerHTML = sum;
+        nav.innerHTML = previewPages.length
+          ? previewPages.map((p, i) =>
+              '<button class="pv-nav-item" data-pi="' + i + '">' +
+              mEsc(p.title || p.path) + "<small>" + mEsc(p.path) + "</small></button>").join("")
+          : '<div class="pv-empty">没有已发布页面</div>';
+        if (previewPages.length) renderPreviewPage(0);
+      })
+      .catch((e) => {
+        $("pvSummary").innerHTML = '<span class="err">预览失败：' + mEsc(String(e)) + "</span>";
+      });
+  }
+  function renderPreviewPage(i) {
+    const p = previewPages[i];
+    if (!p) return;
+    document.querySelectorAll(".pv-nav-item").forEach((el, idx) =>
+      el.classList.toggle("active", idx === i));
+    const mods = (p.modules ?? []).map((m) => {
+      const items = (m.items ?? []).map((it) =>
+        '<div class="pv-item">' + mEsc(it.title || it.question || it.heading || "(无标题)") +
+        (it.kbItemId ? ' <small>· 来自知识库</small>' : "") + "</div>").join("");
+      return '<div class="pv-mod"><div class="pv-mod-head">' +
+        '<span class="pv-mod-type">' + mEsc(m.type || "block") + "</span>" +
+        mEsc(m.heading || m.title || "") + "</div>" + items + "</div>";
+    }).join("");
+    $("pvDetail").innerHTML =
+      '<h3 class="pv-page-title">' + mEsc(p.title || p.path) + "</h3>" +
+      '<div class="pv-page-path">/' + mEsc((p.path || "").replace(/^\\//, "")) + "</div>" +
+      (mods || '<div class="pv-empty">该页没有模块</div>');
+  }
+  on("modPreview", "click", openPreview);
+  $("pvClose").addEventListener("click", () => { $("pvScrim").hidden = true; });
+  $("pvScrim").addEventListener("click", (e) => {
+    if (e.target === $("pvScrim")) $("pvScrim").hidden = true;
+  });
+  $("pvPages").addEventListener("click", (e) => {
+    const it = e.target.closest("[data-pi]");
+    if (it) renderPreviewPage(Number(it.dataset.pi));
+  });
+
   // ── 发布并重建 ─────────────────────────────────────
   //
   // 「发布」= 物化（写 modules.generated.ts）+ 重建（next build 出 HTML）。
   // 只物化不重建的话，访客看到的还是旧内容 —— 静态站伺服的是构建产物。
   on("modPublish", "click", async () => {
     if (!siteId) return;
+    // 发布是覆盖写 + 重建线上站 —— 先确认，附摘要（Linear/Vercel 发布前确认模式）
+    const st = modStats;
+    const ok = typeof confirmModal === "function"
+      ? await confirmModal({
+          title: "发布并重建站点？",
+          body: "将把当前编排物化并重建线上静态站，覆盖线上内容。",
+          summary:
+            "页面 <b>" + (st?.pages ?? 0) + "</b> · 模块 <b>" + (st?.modules ?? 0) +
+            "</b> · 条目 <b>" + (st?.items ?? 0) + "</b> · 待审 <b>" + pendingCount() + "</b>",
+          okText: "确认发布",
+        })
+      : true;
+    if (!ok) return;
     const btn = $("modPublish");
     btn.disabled = true;
     btn.textContent = "发布中…";
@@ -1361,6 +1574,7 @@ function bindModulePanel() {
         return;
       }
       modStats = d.stats;
+      refreshChips(0);
 
       const rb = d.rebuild;
       if (!rb) {

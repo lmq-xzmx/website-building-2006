@@ -40,9 +40,11 @@ export const MEDIA_PANEL_CSS = `
   gap: 12px; align-content: start;
 }
 .mcard {
-  border: 1px solid var(--line); border-radius: var(--radius);
+  border: 1px solid var(--line-soft); border-radius: var(--radius);
   background: var(--panel); overflow: hidden; display: flex; flex-direction: column;
+  box-shadow: var(--shadow-sm); transition: border-color .15s, transform .12s, box-shadow .15s;
 }
+.mcard:hover { border-color: var(--line-strong); transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .mcard .thumb {
   height: 120px; background: var(--panel-2);
   display: flex; align-items: center; justify-content: center; overflow: hidden;

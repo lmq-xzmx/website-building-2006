@@ -52,9 +52,9 @@ for (const name of requiredGlobals) {
 // ── 3. 关键 DOM id ──────────────────────────────────────
 const ids = [
   "site", "kb", "q", "reload", "save", "publish", "who",
-  "tabPlan", "tabModule", "tabWechat", "tabMedia", "modulePane", "wechatPane", "mediaPane",
-  "tabFragments", "fragmentsPane", "fragList", "fragDetail", "fragReload",
-  "tabHistory", "historyPane", "verList", "verDetail", "verReload",
+  "modulePane", "wechatPane", "mediaPane",
+  "fragmentsPane", "fragList", "fragDetail", "fragReload",
+  "historyPane", "verList", "verDetail", "verReload",
   "verDiff", "verRollback",
   "modAddPage", "modPageList",
   "modAddModule", "modModuleList", "modFragSel", "modAddFragment",
@@ -64,6 +64,14 @@ const ids = [
   "wcSide", "wcPreview", "wcCopyRich", "wcCopyPlain",
   "mediaGrid", "mediaQ", "mediaCat", "mediaUpload", "mediaFile",
   "toast",
+  // v2 壳子
+  "planView", "kbDrawer", "drawerScrim", "drawerClose", "kbToggle", "kbResize",
+  "crumbSite", "crumbView",
+  // 命令面板 + 弹窗
+  "cmdkScrim", "cmdkInput", "cmdkList",
+  "modalScrim", "modalTitle", "modalBody", "modalSummary", "modalCancel", "modalOk",
+  // 发布预览
+  "modPreview", "pvScrim", "pvBadge", "pvSummary", "pvPages", "pvDetail", "pvClose",
 ];
 for (const id of ids) {
   if (!html.includes(`id="${id}"`)) problems.push(`缺少 DOM id: ${id}`);

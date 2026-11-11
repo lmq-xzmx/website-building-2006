@@ -56,12 +56,13 @@ export const HISTORY_PANEL_CSS = `
   overflow-y: auto; padding: 10px; flex: 1;
 }
 .vrow {
-  border: 1px solid var(--line); border-radius: var(--radius);
+  border: 1px solid var(--line-soft); border-radius: var(--radius);
   padding: 8px 10px; margin-bottom: 8px; background: var(--panel);
-  cursor: pointer;
+  cursor: pointer; box-shadow: var(--shadow-sm);
+  transition: border-color .15s, transform .12s, box-shadow .15s;
 }
-.vrow:hover { border-color: #39414f; }
-.vrow.sel { border-color: var(--accent); background: var(--panel-2); }
+.vrow:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.vrow.sel { border-color: var(--accent); background: var(--accent-soft); box-shadow: var(--ring); }
 .vrow .t { font-size: 13px; font-weight: 500; margin-bottom: 3px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .vrow .m { color: var(--dim); font-size: 11px; display: flex; gap: 6px;

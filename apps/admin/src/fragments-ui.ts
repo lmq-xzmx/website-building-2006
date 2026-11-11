@@ -49,12 +49,13 @@ export const FRAGMENTS_PANEL_CSS = `
   overflow-y: auto; padding: 10px; flex: 1;
 }
 .frow {
-  border: 1px solid var(--line); border-radius: var(--radius);
+  border: 1px solid var(--line-soft); border-radius: var(--radius);
   padding: 8px 10px; margin-bottom: 8px; background: var(--panel);
-  cursor: pointer;
+  cursor: pointer; box-shadow: var(--shadow-sm);
+  transition: border-color .15s, transform .12s, box-shadow .15s;
 }
-.frow:hover { border-color: #39414f; }
-.frow.sel { border-color: var(--accent); background: var(--panel-2); }
+.frow:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.frow.sel { border-color: var(--accent); background: var(--accent-soft); box-shadow: var(--ring); }
 .frow .t { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
 .frow .m { color: var(--dim); font-size: 11px; display: flex; gap: 6px;
   align-items: center; flex-wrap: wrap; }
