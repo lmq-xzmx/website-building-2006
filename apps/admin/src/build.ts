@@ -72,7 +72,10 @@ export async function rebuildSite(
   const siteRel = `sites/${siteId}`;
 
   return new Promise<RebuildResult>((resolvePromise) => {
-    const child = spawn("node", [script, siteRel], {
+    // 用当前解释器的绝对路径，不要写死 "node"：
+    // 后台常由 systemd / 容器 / nvm 启动，PATH 里未必有 node，
+    // spawn("node") 会直接 ENOENT → 发布结果里只剩一句「重建失败」。
+    const child = spawn(process.execPath, [script, siteRel], {
       cwd: root,
       env: { ...process.env, NODE_ENV: "production" },
     });

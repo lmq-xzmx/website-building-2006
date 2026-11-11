@@ -1,0 +1,314 @@
+{
+  "version": 1,
+  "siteId": "demo-saas",
+  "updatedAt": "2026-11-11T14:19:16.837Z",
+  "templates": [
+    {
+      "id": "tpl_case",
+      "name": "案例模版",
+      "description": "客户案例的标准结构：谁、遇到什么挑战、怎么解决、量化结果。",
+      "fields": [
+        {
+          "key": "client",
+          "label": "客户名",
+          "type": "text",
+          "required": true,
+          "placeholder": "某股份制银行"
+        },
+        {
+          "key": "challenge",
+          "label": "挑战",
+          "type": "longtext",
+          "required": true,
+          "placeholder": "客户遇到了什么问题，一行一个要点"
+        },
+        {
+          "key": "solution",
+          "label": "方案",
+          "type": "longtext",
+          "required": true,
+          "placeholder": "我们怎么解决的，一行一个要点"
+        },
+        {
+          "key": "results",
+          "label": "量化结果",
+          "type": "list",
+          "required": true,
+          "placeholder": "一行一条，AI 最爱引用数字"
+        }
+      ],
+      "page": {
+        "pathPrefix": "/stories",
+        "blocks": [
+          {
+            "kind": "heading"
+          },
+          {
+            "kind": "text",
+            "field": "challenge",
+            "title": "挑战"
+          },
+          {
+            "kind": "text",
+            "field": "solution",
+            "title": "方案"
+          },
+          {
+            "kind": "bullets",
+            "field": "results",
+            "title": "量化结果"
+          },
+          {
+            "kind": "cta",
+            "title": "想聊聊你的场景？"
+          }
+        ]
+      },
+      "createdAt": "2026-11-11T11:30:00.000Z",
+      "updatedAt": "2026-11-11T11:30:00.000Z"
+    },
+    {
+      "id": "tpl_product",
+      "name": "产品模版",
+      "description": "产品线的标准结构：定位、能力说明、核心规格、亮点。",
+      "fields": [
+        {
+          "key": "pitch",
+          "label": "产品定位",
+          "type": "text",
+          "required": true,
+          "placeholder": "一句话说清这是什么"
+        },
+        {
+          "key": "description",
+          "label": "能力说明",
+          "type": "longtext",
+          "required": true,
+          "placeholder": "部署形态、支持的模式、关键能力"
+        },
+        {
+          "key": "specs",
+          "label": "核心规格",
+          "type": "metrics",
+          "required": true,
+          "placeholder": "数值 + 单位 + 指标名"
+        },
+        {
+          "key": "highlights",
+          "label": "产品亮点",
+          "type": "list",
+          "placeholder": "一行一条"
+        }
+      ],
+      "page": {
+        "pathPrefix": "/products",
+        "blocks": [
+          {
+            "kind": "heading"
+          },
+          {
+            "kind": "text",
+            "field": "description",
+            "title": "产品说明"
+          },
+          {
+            "kind": "metrics",
+            "field": "specs",
+            "title": "核心规格"
+          },
+          {
+            "kind": "bullets",
+            "field": "highlights",
+            "title": "产品亮点"
+          },
+          {
+            "kind": "cta",
+            "title": "获取产品白皮书与报价"
+          }
+        ]
+      },
+      "createdAt": "2026-11-11T11:30:00.000Z",
+      "updatedAt": "2026-11-11T11:30:00.000Z"
+    },
+    {
+      "id": "tpl_article",
+      "name": "文章模版",
+      "description": "洞察文章的标准结构：导语、正文、可选购要点。",
+      "fields": [
+        {
+          "key": "summary",
+          "label": "导语",
+          "type": "text",
+          "required": true,
+          "placeholder": "两句话讲清这篇文章回答什么问题"
+        },
+        {
+          "key": "body",
+          "label": "正文",
+          "type": "longtext",
+          "required": true,
+          "placeholder": "一段一个重点，空行分段"
+        },
+        {
+          "key": "points",
+          "label": "要点",
+          "type": "list",
+          "placeholder": "一行一条（可选）"
+        }
+      ],
+      "page": {
+        "pathPrefix": "/notes",
+        "blocks": [
+          {
+            "kind": "heading"
+          },
+          {
+            "kind": "text",
+            "field": "summary",
+            "title": "导语"
+          },
+          {
+            "kind": "text",
+            "field": "body"
+          },
+          {
+            "kind": "bullets",
+            "field": "points",
+            "title": "要点回顾"
+          },
+          {
+            "kind": "cta",
+            "title": "有同样的场景？聊聊"
+          }
+        ]
+      },
+      "createdAt": "2026-11-11T11:30:00.000Z",
+      "updatedAt": "2026-11-11T11:30:00.000Z"
+    }
+  ],
+  "instances": [
+    {
+      "id": "ins_case_bank",
+      "templateId": "tpl_case",
+      "name": "股份制银行月度报表交付提速",
+      "slug": "joint-stock-bank",
+      "values": {
+        "client": "某股份制商业银行",
+        "challenge": "月度报表依赖 14 个系统人工取数与 Excel 汇总，单次交付需 6 周\n数据口径依赖人工核对",
+        "solution": "部署数据集成网关对接 14 个源系统\n用数据工坊统一建模生成报表\n通过审计中枢留存取数链路，接入行内单点登录 SSO",
+        "results": [
+          "月度报表交付周期从 6 周缩短至 4 天",
+          "取数环节人工工时减少 78%",
+          "报表数据口径不一致问题归零"
+        ]
+      },
+      "published": true,
+      "order": 1,
+      "createdAt": "2026-11-11T11:30:00.000Z",
+      "updatedAt": "2026-11-11T13:52:56.055Z",
+      "generatedPageId": "pg_joint-stock-bank"
+    },
+    {
+      "id": "ins_case_auto",
+      "templateId": "tpl_case",
+      "name": "汽车 Tier 1 供应商数据打通",
+      "slug": "auto-tier1",
+      "values": {
+        "client": "某汽车零部件 Tier 1 供应商",
+        "challenge": "11 套异构系统数据分散\n采购与生产数据需人工映射对齐，数据延迟达 1 天",
+        "solution": "通过数据集成网关建立统一采集层\n用规则引擎实现采购与生产数据的实时联动\n按车间维度做行级数据隔离",
+        "results": [
+          "日均处理数据量提升 3.6 倍",
+          "跨系统数据延迟从 24 小时降至 90 秒",
+          "人工对账工作量下降 65%"
+        ]
+      },
+      "published": true,
+      "order": 2,
+      "createdAt": "2026-11-11T11:30:00.000Z",
+      "updatedAt": "2026-11-11T13:27:45.103Z",
+      "generatedPageId": "pg_auto-tier1"
+    },
+    {
+      "id": "ins_case_bankcore",
+      "templateId": "tpl_case",
+      "name": "股份制银行核心系统数据中台",
+      "slug": "bank-core",
+      "values": {
+        "client": "某股份制银行",
+        "challenge": "核心系统周边 17 个存量系统各自为政\n银保监合规检查要求数据链路可审计",
+        "solution": "整合 17 个存量系统建设统一数据中台\n审计日志留存满足银保监合规检查",
+        "results": [
+          "数据交付周期从 6 周缩短到 3 周",
+          "日均处理 2400 万条合规流水"
+        ]
+      },
+      "published": true,
+      "order": 3,
+      "createdAt": "2026-11-11T11:30:00.000Z",
+      "updatedAt": "2026-11-11T13:27:45.172Z",
+      "generatedPageId": "pg_bank-core"
+    },
+    {
+      "id": "ins_prod_gateway",
+      "templateId": "tpl_product",
+      "name": "数据集成网关",
+      "slug": "data-gateway",
+      "values": {
+        "pitch": "跨异构系统的数据采集与路由网关",
+        "description": "数据集成网关部署在企业网络边界，连接 ERP、CRM、数据库与 SaaS 等异构系统\n支持实时与批量两种采集模式\n提供数据质量校验与断点续传能力\n单节点日均处理数据量 42 亿条，支持 1200+ 数据源连接器",
+        "specs": [
+          {
+            "value": "1200",
+            "label": "数据源连接器"
+          },
+          {
+            "value": "42",
+            "unit": "亿条",
+            "label": "单节点日处理数据量"
+          },
+          {
+            "value": "80",
+            "unit": "ms",
+            "label": "采集延迟 P99"
+          },
+          {
+            "value": "12",
+            "label": "支持信创产品认证数"
+          }
+        ],
+        "highlights": [
+          "1200+ 数据源连接器",
+          "单节点日处理 42 亿条",
+          "采集延迟 P99 80ms",
+          "断点续传保证数据不丢"
+        ]
+      },
+      "published": true,
+      "order": 1,
+      "createdAt": "2026-11-11T11:30:00.000Z",
+      "updatedAt": "2026-11-11T13:27:45.253Z",
+      "generatedPageId": "pg_data-gateway"
+    },
+    {
+      "id": "ins_art_pd",
+      "templateId": "tpl_article",
+      "name": "私有化部署的 12 项合规检查清单",
+      "slug": "pd-checklist",
+      "values": {
+        "summary": "金融与国企客户做私有化部署时，合规团队必问的 12 个问题。本文按被问到的频率排序，并给出我们项目中的标准答复。",
+        "body": "在我们 180 家客户中，金融与国企占 46%。合规团队在技术选型阶段必问的 12 个问题高度重叠，本文按被问频率排序。\n排名第一的问题是「部署后是否需要联网」，标准答复是离线许可证，部署完成后不依赖外网授权校验。\n第二与第三名分别是「数据物理隔离到什么粒度」与「审计日志保留多久」，前者我们答数据库物理隔离加租户内行级隔离，后者默认 3 年可延长至 7 年。",
+        "points": [
+          "部署后不依赖外网授权校验（离线许可证）",
+          "数据库物理隔离 + 租户内行级隔离",
+          "审计日志默认保留 3 年，可延长至 7 年"
+        ]
+      },
+      "published": true,
+      "order": 1,
+      "createdAt": "2026-11-11T11:30:00.000Z",
+      "updatedAt": "2026-11-11T13:27:45.328Z",
+      "generatedPageId": "pg_pd-checklist"
+    }
+  ]
+}

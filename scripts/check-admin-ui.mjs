@@ -1,150 +1,121 @@
 #!/usr/bin/env node
 /**
- * 后台界面的静态自检 —— 抓「脚本被当文本渲染」这类低级错误。
+ * 后台界面的静态自检。
  *
- * 起因：EDITOR_SCRIPT 漏了 <script> 标签，浏览器把 JS 当纯文本插进页面，
- * 界面上看着有东西（甚至 text() 能读到脚本源码），但**一行都没执行**。
- * 这种 bug 只有真点按钮才会暴露 —— 静态检查能提前抓住。
+ * v3 起界面是**真文件**（apps/admin/public/console 下的 ES 模块 + CSS），
+ * 所以这一版查的东西也跟着换了 —— 从「模板字符串里有没有漏 <script>」
+ * 变成「模块图能不能闭合、每个视图有没有 create、CSS 括号配不配平」。
  *
- * 检查项：
- *   1. 每个 JS 片段都被 <script> 正确包裹
- *   2. 页面引用的全局函数都有定义
- *   3. 关键 DOM id 都存在（脚本按 id 取元素）
+ * 为什么值得留着：后台零构建，模块解析发生在浏览器 ——
+ * 一个路径写错就是整屏白页，而且服务端看不出来。静态检查能在启动前抓住。
  *
- * 用法：node scripts/check-admin-ui.mjs
+ * 用法：pnpm check:ui
  */
+
+import { readFile, stat } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { renderPage } from "../apps/admin/src/ui.ts";
 
-const html = await renderPage({ displayName: "自检" });
-
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const consoleDir = resolve(root, "apps/admin/public/console");
 const problems = [];
+const notes = [];
 
-// ── 1. script 标签配对 ──────────────────────────────────
+/* ── 1. 外壳是否指向了正确的资源 ───────────────────────── */
+const html = await renderPage({ displayName: "自检" });
+for (const asset of ["/console/index.css", "/console/app.js"]) {
+  if (!html.includes(asset)) problems.push(`外壳没有引用 ${asset}`);
+}
+if (html.includes("window.__USER__") && !html.includes("window.__PERMS__")) {
+  problems.push("外壳注入了用户但没有注入权限");
+}
 const openTags = (html.match(/<script\b/g) ?? []).length;
 const closeTags = (html.match(/<\/script>/g) ?? []).length;
-if (openTags !== closeTags) {
-  problems.push(`script 标签不配对：开 ${openTags} 个，闭 ${closeTags} 个`);
-}
+if (openTags !== closeTags) problems.push(`script 标签不配对：${openTags} / ${closeTags}`);
 
-// 形如 `<script>` 后面直接跟 JS（而不是换行/缩进）—— 判断裸文本插入
-// 裸文本的特征：script 块的**第一行**就是 HTML 标签（脚本里的 HTML 字符串不在首行）
-const scriptBlocks = html.match(/<script\b[^>]*>([\s\S]*?)<\/script>/g) ?? [];
-for (const block of scriptBlocks) {
-  const body = block.replace(/^<script\b[^>]*>/, "").replace(/<\/script>$/, "");
-  const firstLine = body.trim().split("\n")[0] ?? "";
-  if (/^<[a-zA-Z!/]/.test(firstLine)) {
-    problems.push("某个 script 块的第一行是 HTML —— 内容被当文本插入了");
-  }
-}
-
-// ── 2. 全局函数必须有定义 ──────────────────────────────
-// 页面里被调用但从未定义的 window.xxx / 裸函数
-const requiredGlobals = [
-  "__rte", "__rteHtml", "__modAddKbItem", "__modAddManualItem",
-  "__modInsertFragment", "__modDetachFragment",
+/* ── 2. 资源文件都在 ───────────────────────────────────── */
+const mustExist = [
+  "index.css",
+  "app.js",
+  "lib/dom.js",
+  "lib/api.js",
+  "lib/store.js",
+  "lib/router.js",
+  "lib/rich.js",
+  "lib/preview.js",
+  "lib/drag.js",
+  "lib/picker.js",
 ];
-for (const name of requiredGlobals) {
-  const defined = new RegExp(`window\\.${name}\\s*=`).test(html);
-  if (!defined) problems.push(`全局 ${name} 未定义`);
-}
-
-// ── 3. 关键 DOM id ──────────────────────────────────────
-const ids = [
-  "site", "kb", "q", "reload", "save", "publish", "who",
-  "modulePane", "wechatPane", "mediaPane",
-  "fragmentsPane", "fragList", "fragDetail", "fragReload",
-  "historyPane", "verList", "verDetail", "verReload",
-  "verDiff", "verRollback",
-  "modAddPage", "modPageList",
-  "modAddModule", "modModuleList", "modFragSel", "modAddFragment",
-  "modAddManual", "modItemList", "modItemCount",
-  "modEditor", "modSave", "modPublish", "modLook",
-  "kbList", "kbCount", "planList", "planCount", "checkPane",
-  "wcSide", "wcPreview", "wcCopyRich", "wcCopyPlain",
-  "mediaGrid", "mediaQ", "mediaCat", "mediaUpload", "mediaFile",
-  "toast",
-  // v2 壳子
-  "planView", "kbDrawer", "drawerScrim", "drawerClose", "kbToggle", "kbResize",
-  "crumbSite", "crumbView",
-  // 命令面板 + 弹窗
-  "cmdkScrim", "cmdkInput", "cmdkList",
-  "modalScrim", "modalTitle", "modalBody", "modalSummary", "modalCancel", "modalOk",
-  // 发布预览
-  "modPreview", "pvScrim", "pvBadge", "pvSummary", "pvPages", "pvDetail", "pvClose",
-];
-for (const id of ids) {
-  if (!html.includes(`id="${id}"`)) problems.push(`缺少 DOM id: ${id}`);
-}
-
-// ── 4. 页面里调用的**顶层**函数必须有定义 ──────────────
-// 只查 script 块内的代码 —— CSS 里的 var(--x) 之类不该算
-const codeOnly = scriptBlocks
-  .map((b) => b.replace(/^<script\b[^>]*>/, "").replace(/<\/script>$/, ""))
-  .join("\n");
-
-// 只查不在点号之后的调用 —— 方法调用（obj.foo()）不是顶层函数
-const called = new Set();
-for (const m of codeOnly.matchAll(/(^|[^.\w$])([a-zA-Z_$][\w$]*)\s*\(/g)) {
-  called.add(m[2]);
-}
-const defined = new Set();
-for (const m of codeOnly.matchAll(/function\s+([a-zA-Z_$][\w$]*)/g)) defined.add(m[1]);
-for (const m of codeOnly.matchAll(/(?:const|let|var)\s+([a-zA-Z_$][\w$]*)\s*=/g)) defined.add(m[1]);
-// 对象字面量的方法简写：{ foo() { ... } }
-for (const m of codeOnly.matchAll(/[{,]\s*([a-zA-Z_$][\w$]*)\s*\([^)]*\)\s*\{/g)) defined.add(m[1]);
-
-// 这些是浏览器/运行时内置或语言关键字，不该报
-const builtin = new Set([
-  "if", "for", "while", "switch", "catch", "return", "typeof", "function",
-  "async", "await", "new", "delete", "void", "in", "of", "instanceof",
-  "String", "Number", "Boolean", "Array", "Object", "JSON", "Math", "Date",
-  "Promise", "Set", "Map", "RegExp", "Error", "parseInt", "parseFloat", "isNaN",
-  "encodeURIComponent", "decodeURIComponent", "fetch", "alert", "confirm",
-  "setTimeout", "clearTimeout", "setInterval", "clearInterval",
-  "require", "console", "document", "window", "location", "navigator",
-  "Blob", "ClipboardItem", "File", "FileReader", "FormData", "URL",
-  "URLSearchParams", "AbortController", "TextEncoder", "TextDecoder",
-  // CSS 函数名 —— 出现在 style 字符串里，不是 JS 调用
-  "gradient", "translateX", "translateY", "scale", "rotate", "var", "calc",
-  // Promise 构造器的回调参数与浏览器 API
-  "resolve", "reject", "prompt", "confirm", "alert", "open",
-]);
-
-for (const name of called) {
-  if (builtin.has(name)) continue;
-  if (defined.has(name)) continue;
-  problems.push(`调用了未定义的函数：${name}`);
-}
-
-// ── 5. 每个 script 块必须能编译 ─────────────────────────
-//
-// 为什么必须查这一项：
-//   经典 <script> 里出现「await 在非 async 函数里」或「顶层 await」，
-//   是**语法错误** —— 浏览器整块不执行，
-//   页面表现是「所有按钮都没反应 + 某个函数 is not defined」，
-//   而页面看起来完全正常（HTML 渲染出来了，控件也都在）。
-//
-//   这类 bug 只有真点按钮才暴露，所以静态编译一遍是唯一靠谱的护栏。
-//   new Function 的函数体不是模块 —— 顶层 await 同样是非法语法，正好一起抓。
-for (const [i, block] of scriptBlocks.entries()) {
-  const body = block.replace(/^<script\b[^>]*>/, "").replace(/<\/script>$/, "");
+for (const rel of mustExist) {
   try {
-    // eslint-disable-next-line no-new-func
-    new Function(body);
-  } catch (e) {
-    problems.push(
-      `第 ${i + 1} 个 script 块编译失败：${e instanceof Error ? e.message : String(e)}` +
-        `（多半是 await 用在了非 async 函数里 —— 整块脚本不会执行）`,
-    );
+    await stat(resolve(consoleDir, rel));
+  } catch {
+    problems.push(`缺少资源：${rel}`);
   }
 }
 
-// ── 报告 ────────────────────────────────────────────────
+/* ── 3. 模块图闭合 ─────────────────────────────────────── */
+const seen = new Set();
+const queue = ["app.js"];
+while (queue.length) {
+  const rel = queue.shift();
+  if (seen.has(rel)) continue;
+  seen.add(rel);
+  let src;
+  try {
+    src = await readFile(resolve(consoleDir, rel), "utf8");
+  } catch {
+    problems.push(`导入不存在的模块：${rel}`);
+    continue;
+  }
+  const dir = dirname(rel);
+  for (const m of src.matchAll(/from\s+"(\.[^"]+)"/g)) {
+    const target = resolve(consoleDir, dir, m[1]);
+    const asRel = target.slice(consoleDir.length + 1);
+    try {
+      await stat(target);
+      queue.push(asRel);
+    } catch {
+      problems.push(`${rel} 导入了不存在的 ${m[1]}`);
+    }
+  }
+  if (rel.startsWith("views/") && !/export\s+function\s+create\s*\(/.test(src)) {
+    problems.push(`${rel} 没有导出 create()`);
+  }
+}
+notes.push(`模块图：${seen.size} 个文件，路径全部可解析`);
+
+/* ── 4. CSS 括号配平 & 明显笔误 ────────────────────────── */
+const css = await readFile(resolve(consoleDir, "index.css"), "utf8");
+const open = (css.match(/{/g) ?? []).length;
+const close = (css.match(/}/g) ?? []).length;
+if (open !== close) problems.push(`index.css 括号不配平：{ ${open} 个，} ${close} 个`);
+
+for (const m of css.matchAll(/#[0-9A-Fa-f]{2,6}\s+[0-9A-Fa-f]{2,4}\s*;/g)) {
+  problems.push(`index.css 里有非法颜色值：${m[0]}`);
+}
+if (/var\(\s*--[a-z-]+\s*\)/.test(css)) {
+  for (const m of css.matchAll(/var\(\s*--([a-z-]+)\s*\)/g)) {
+    if (!css.includes(`--${m[1]}:`)) problems.push(`用了未定义的变量 --${m[1]}`);
+  }
+}
+
+/* ── 5. 客户端不该用会白屏的写法 ───────────────────────── */
+for (const rel of seen) {
+  if (!rel.endsWith(".js")) continue;
+  const src = await readFile(resolve(consoleDir, rel), "utf8");
+  if (/\b(alert|confirm|prompt)\s*\(/.test(src.replace(/\/\/.*$/gm, ""))) {
+    problems.push(`${rel} 使用了原生 alert/confirm/prompt —— 用 lib/dom 的 dialog/toast`);
+  }
+}
+
+/* ── 结果 ─────────────────────────────────────────────── */
+for (const n of notes) console.log(`  · ${n}`);
 if (problems.length) {
-  console.error("❌ 后台界面自检未通过：");
-  for (const p of problems) console.error("  - " + p);
+  console.error(`\n✗ 后台界面自检发现 ${problems.length} 个问题：`);
+  for (const p of problems) console.error(`  - ${p}`);
   process.exit(1);
 }
-
-console.log(`✅ 后台界面自检通过（${ids.length} 个 DOM id，${requiredGlobals.length} 个全局，${scriptBlocks.length} 个 script 块）`);
+console.log(`\n✓ 后台界面自检通过（${problems.length} 个问题，${seen.size} 个模块）`);

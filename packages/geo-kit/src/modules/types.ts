@@ -303,6 +303,12 @@ export interface PageDef {
   publishAt?: string;
   /** 置顶 —— 导航里排最前 */
   sticky?: boolean;
+  /**
+   * 生成标记 —— 这个页面由哪个模版实例生成（templates.json 里的实例 id）。
+   * 生成页是实例的「投影」：实例是唯一事实源，重新生成会覆盖本页的内容。
+   * 手写编排的页面没有这个字段。
+   */
+  generatedFrom?: string;
 }
 
 /** 模块编排 —— 一个站点一份 */

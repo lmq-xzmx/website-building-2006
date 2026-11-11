@@ -14,13 +14,14 @@ import * as store from "./lib/store.js";
 
 import * as overview from "./views/overview.js";
 import * as content from "./views/content.js";
+import * as templates from "./views/templates.js";
 import * as media from "./views/media.js";
 import * as components from "./views/components.js";
 import * as wechat from "./views/wechat.js";
 import * as release from "./views/release.js";
 import * as appearance from "./views/appearance.js";
 
-const VIEW_IMPL = { overview, content, media, components, wechat, release, appearance };
+const VIEW_IMPL = { overview, content, templates, media, components, wechat, release, appearance };
 
 const app = document.getElementById("app");
 let railEl = null;

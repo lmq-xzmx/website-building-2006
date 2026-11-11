@@ -14,7 +14,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, extname, sep } from "node:path";
 
 import {
   PostgresKnowledgeSource,
@@ -57,7 +57,23 @@ import {
   type FragmentMap,
 } from "@geokit/geo-kit";
 
-import { DATABASE_URL, HAS_DB, HOST, PORT, SITES_DIR, listSites } from "./config.ts";
+// ── 内容模版（模版定结构，实例填内容，生成前台页面）────────
+//
+//   templates.json      模版 + 实例（模版层的唯一事实源）
+//   实例「生成」页面进编排（generatedFrom 标记），发布时随编排物化上线
+
+import {
+  generateTemplatePages,
+  newInstanceId,
+  newTemplateId,
+  readTemplateLibrary,
+  validateInstance,
+  writeTemplateLibrary,
+  type ContentTemplate,
+  type TemplateInstance,
+} from "@geokit/geo-kit";
+
+import { DATABASE_URL, HAS_DB, HOST, PORT, SITE_BASE_URL, SITES_DIR, listSites } from "./config.ts";
 import { rebuildSite } from "./build.ts";
 import { writeFile, rm } from "node:fs/promises";
 import {
@@ -72,6 +88,72 @@ import {
   type MediaAsset,
 } from "@geokit/geo-kit";
 import { renderPage } from "./ui.ts";
+
+/**
+ * 前端资源目录 —— 与 server.ts 同级上一层的 public/console。
+ * 用 import.meta.url 定位，不依赖 cwd（后台可能被任意目录启动）。
+ */
+const CONSOLE_DIR = resolve(new URL("../public/console/", import.meta.url).pathname);
+
+/** 静态资源的 Content-Type —— 后台资源 + 站点构建产物都会用到 */
+const MIME: Record<string, string> = {
+  html: "text/html; charset=utf-8",
+  htm: "text/html; charset=utf-8",
+  js: "text/javascript; charset=utf-8",
+  mjs: "text/javascript; charset=utf-8",
+  css: "text/css; charset=utf-8",
+  json: "application/json; charset=utf-8",
+  map: "application/json; charset=utf-8",
+  webmanifest: "application/manifest+json; charset=utf-8",
+  svg: "image/svg+xml",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  avif: "image/avif",
+  ico: "image/x-icon",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
+  wasm: "application/wasm",
+  xml: "application/xml; charset=utf-8",
+  txt: "text/plain; charset=utf-8",
+  pdf: "application/pdf",
+  mp4: "video/mp4",
+  webm: "video/webm",
+};
+
+function mimeOf(file: string): string {
+  const ext = file.split(".").pop()?.toLowerCase() ?? "";
+  return MIME[ext] ?? "application/octet-stream";
+}
+
+/**
+ * 预览页降级为**静态版式**：保留服务端导出的完整 HTML、CSS、图片和站内
+ * 链接，去掉 Next.js 客户端脚本。
+ *
+ * 为什么不保留客户端运行时：静态导出产物按站点根路径生成，挂在
+ * /preview/<siteId>/ 子路径下时，客户端 hydration 会拿 RSC flight 数据
+ * 与 HTML 比对，任何路径改写都会让两边不一致（React #418）；预取请求
+ * 也会打到后台根路径 404；改写外部 JS 更会插坏正则字面量。
+ * 预览的目的是「看这一版长什么样」，静态 HTML 已经完整表达版式与内容，
+ * 交互由正式站点负责 —— 这样零脚本错误，也不依赖 Next 内部实现。
+ */
+function staticPreviewHtml(src: string, base: string): string {
+  return src
+    // 先移除脚本（含 flight 数据 / JSON-LD），后面改属性就不会误伤 JS 内容
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/(\b(?:src|href|srcset|poster|data-src|data-href)\s*=\s*["'])\/(?!\/)/g, `$1${base}/`)
+    .replace(/url\(\s*(["']?)\/(?!\/)/g, `url($1${base}/`);
+}
+
+/** 外部 CSS 里的站内绝对路径（url(/assets/…)) */
+function previewCss(src: string, base: string): string {
+  return src.replace(/url\(\s*(["']?)\/(?!\/)/g, `url($1${base}/`);
+}
+
 import {
   can,
   denyMessage,
@@ -370,7 +452,123 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
     // GET /api/sites —— 站点列表
     if (req.method === "GET" && path === "/api/sites") {
-      json(res, 200, { sites: await listSites() });
+      // 开发机跟随当前后台地址（端口换了不用改代码）；生产机由 SITE_BASE_URL 指定
+      const fromEnv = SITE_BASE_URL.length > 0;
+      const proto = String(req.headers["x-forwarded-proto"] ?? url.protocol.replace(":", ""))
+        .split(",")[0]
+        .trim();
+      const origin = fromEnv ? SITE_BASE_URL : `${proto}://${url.host}`;
+      json(res, 200, {
+        sites: await listSites(),
+        siteBaseUrl: `${origin}/`,
+        siteBaseFrom: fromEnv ? "env" : "request",
+      });
+      return;
+    }
+
+    // ── 前端资源 ────────────────────────────────────────
+    //
+    // 后台界面是**真文件**（ES 模块 + CSS），不是模板字符串。
+    // 好处：能写反引号、有语法高亮、改样式不用重启进程。
+    // 代价：要自己发静态文件 —— 这段就是。
+    //
+    // 只发 console/ 目录，且只认白名单字符，防目录穿越。
+    if (req.method === "GET" && path.startsWith("/console/")) {
+      const rel = path.slice("/console/".length);
+      if (!/^[A-Za-z0-9_\-./]+$/.test(rel) || rel.includes("..")) {
+        text(res, 400, "路径非法");
+        return;
+      }
+      try {
+        const buf = await readFile(resolve(CONSOLE_DIR, rel));
+        res.writeHead(200, {
+          "Content-Type": mimeOf(rel),
+          "Cache-Control": "no-store",
+        });
+        res.end(buf);
+      } catch {
+        text(res, 404, "资源不存在");
+      }
+      return;
+    }
+
+    // GET /preview/:siteId/* —— 打开已构建的静态站
+    //
+    // 发布完给用户的是「能点开的网址」，不是产物文件夹。这里直接伺服
+    // sites/<id>/out/，所以点开看到的就是刚才重建出来的那一版。
+    const previewHit = path.match(/^\/preview\/([^/]+)(\/.*)?$/);
+    if (req.method === "GET" && previewHit) {
+      const dir = siteDir(previewHit[1]);
+      if (!dir) {
+        text(res, 400, "站点 id 非法");
+        return;
+      }
+      // 根路径统一带尾斜杠，否则站内相对路径会解析到 /preview/ 下
+      if (!previewHit[2]) {
+        res.writeHead(302, { Location: `/preview/${previewHit[1]}/` });
+        res.end();
+        return;
+      }
+      const rel = previewHit[2].replace(/^\/+/, "");
+      if (rel.includes("..") || !/^[A-Za-z0-9_\-./]*$/.test(rel)) {
+        text(res, 400, "路径非法");
+        return;
+      }
+      const outDir = resolve(dir, "out");
+      // 根 / 目录 / 干净路径（/about）→ 对应目录下的 index.html
+      let file: string;
+      if (!rel) file = resolve(outDir, "index.html");
+      else if (rel.endsWith("/")) file = resolve(outDir, rel, "index.html");
+      else if (!extname(rel)) file = resolve(outDir, rel, "index.html");
+      else file = resolve(outDir, rel);
+      // 二次确认没被 .. 带出 out/
+      if (!file.startsWith(outDir + sep)) {
+        text(res, 400, "路径非法");
+        return;
+      }
+      try {
+        const buf = await readFile(file);
+        const ext = extname(file).slice(1).toLowerCase();
+        const base = `/preview/${previewHit[1]}`;
+        const body =
+          ext === "html" || ext === "htm"
+            ? staticPreviewHtml(buf.toString("utf8"), base)
+            : ext === "css"
+              ? previewCss(buf.toString("utf8"), base)
+              : buf; // JS / 图片 / 字体 / txt 原样返回，绝不改写脚本内容
+        res.writeHead(200, {
+          "Content-Type": mimeOf(file),
+          "Cache-Control": "no-store",
+        });
+        res.end(body);
+      } catch {
+        text(res, 404, "站点还没有构建产物 —— 先发布一次");
+      }
+      return;
+    }
+
+    // GET /media/:site/:file —— 站点素材
+    //
+    // 素材在 sites/<id>/public/media/ 下，站内路径是 /media/<file>。
+    // 后台预览与素材库缩略图都要能取到图，所以这里按站点再挂一层。
+    const mediaFile = path.match(/^\/media\/([^/]+)\/([^/]+)$/);
+    if (req.method === "GET" && mediaFile) {
+      const dir = siteDir(mediaFile[1]);
+      const name = mediaFile[2];
+      if (!dir || !/^[A-Za-z0-9._-]+$/.test(name)) {
+        text(res, 400, "路径非法");
+        return;
+      }
+      try {
+        const buf = await readFile(resolve(dir, "public/media", name));
+        res.writeHead(200, {
+          "Content-Type": mimeOf(name),
+          "Cache-Control": "public, max-age=60",
+        });
+        res.end(buf);
+      } catch {
+        text(res, 404, "图片不存在");
+      }
       return;
     }
 
@@ -589,7 +787,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         }
       }
       if (!hit) {
-        json(res, 404, { error: "没找到要审核的内容" });
+        // 404 会让人以为「接口不存在」—— 其实接口在，只是这条内容
+        // 还停留在后台界面的本地草稿里（新建/未保存）。用 409 + 可操作文案
+        // 把「先保存再审核」说清楚，别再让前端面对一个来路不明的 404。
+        json(res, 409, {
+          error: "后台还没这条内容 —— 它可能只在本地草稿里。先点「保存」（⌘S），再审核。",
+          code: "item_not_found",
+        });
         return;
       }
       plan.updatedAt = new Date().toISOString();
@@ -667,6 +871,19 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
       const plan = await readModulePlan(dir, modulesPublish[1]);
       const { map } = await loadFragments(dir, modulesPublish[1]);
+
+      // 模版实例 → 页面：发布前把已发布实例生成/更新进编排。
+      // 实例是唯一事实源，生成页带 generatedFrom 标记，重复生成是更新。
+      let tplGenerated = 0;
+      try {
+        const lib = await readTemplateLibrary(dir, modulesPublish[1]);
+        const result = generateTemplatePages(plan, lib);
+        plan.pages = result.pages;
+        tplGenerated = result.generated;
+      } catch {
+        /* 模版库坏了不阻塞发布 —— 编排里的手写内容照常上线 */
+      }
+
       const problems = validateModulePlan(plan, allItems, map);
       const { pages, skipped } = materializeModulePlan(plan, allItems, map);
 
@@ -736,6 +953,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         stats: modulePlanStats(plan, map),
         written: outPath,
         pages: pages.length,
+        // 本次由模版实例生成/更新的页面数（实例是唯一事实源）
+        tplGenerated,
         // 本次发布留下的版本号 —— 出错时去「版本」标签页回滚
         version,
         // 重建结果 —— 失败不算发布失败（产物已落盘），
@@ -1199,6 +1418,317 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       lib.updatedAt = new Date().toISOString();
       await writeFragmentLibrary(dir, lib);
       json(res, 200, { ok: true });
+      return;
+    }
+
+    // ── 内容模版（模版定结构，实例填内容）────────────────
+    //
+    // 模版层的唯一事实源是 templates.json；实例「生成」页面进编排
+    // （带 generatedFrom 标记），发布时随编排物化上线。
+
+    /** 实例生成页 + 落编排 —— 生成端点与实例 PUT 共用的那一步 */
+    async function syncGeneratedPages(dir: string, siteId: string): Promise<number> {
+      const lib = await readTemplateLibrary(dir, siteId);
+      const plan = await readModulePlan(dir, siteId);
+      const result = generateTemplatePages(plan, lib);
+      plan.pages = result.pages;
+      plan.updatedAt = new Date().toISOString();
+      await writeModulePlan(dir, plan);
+      return result.generated;
+    }
+
+    // GET /api/sites/:id/templates —— 模版 + 实例
+    const templatesGet = path.match(/^\/api\/sites\/([^/]+)\/templates$/);
+    if (req.method === "GET" && templatesGet) {
+      const dir = siteDir(templatesGet[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const lib = await readTemplateLibrary(dir, templatesGet[1]);
+      json(res, 200, { templates: lib.templates, instances: lib.instances });
+      return;
+    }
+
+    // POST /api/sites/:id/templates —— 新建模版
+    const templatesPost = path.match(/^\/api\/sites\/([^/]+)\/templates$/);
+    if (req.method === "POST" && templatesPost) {
+      if (!requirePerm("content.edit")) return;
+      const dir = siteDir(templatesPost[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const body = await readBody(req);
+      let payload: {
+        name?: string;
+        description?: string;
+        fields?: ContentTemplate["fields"];
+        page?: ContentTemplate["page"];
+      };
+      try {
+        payload = JSON.parse(body) as typeof payload;
+      } catch {
+        json(res, 400, { error: "请求不是合法 JSON" });
+        return;
+      }
+      if (!payload.name?.trim() || !payload.page?.pathPrefix?.trim()) {
+        json(res, 400, { error: "模版名与页面路径前缀必填" });
+        return;
+      }
+      const now = new Date().toISOString();
+      const tpl: ContentTemplate = {
+        id: newTemplateId(),
+        name: payload.name.trim(),
+        description: payload.description?.trim() || undefined,
+        fields: payload.fields?.length
+          ? payload.fields
+          : [
+              { key: "summary", label: "导语", type: "text", required: true },
+              { key: "body", label: "正文", type: "longtext", required: true },
+            ],
+        page: payload.page,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const lib = await readTemplateLibrary(dir, templatesPost[1]);
+      lib.templates.push(tpl);
+      await writeTemplateLibrary(dir, lib);
+      json(res, 200, { ok: true, template: tpl });
+      return;
+    }
+
+    // PUT /api/sites/:id/templates/:tid —— 改模版（结构变更不影响已填的实例值）
+    const templatesPut = path.match(/^\/api\/sites\/([^/]+)\/templates\/([^/]+)$/);
+    if (req.method === "PUT" && templatesPut) {
+      if (!requirePerm("content.edit")) return;
+      const dir = siteDir(templatesPut[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const body = await readBody(req);
+      let patch: Partial<ContentTemplate>;
+      try {
+        patch = JSON.parse(body) as Partial<ContentTemplate>;
+      } catch {
+        json(res, 400, { error: "请求不是合法 JSON" });
+        return;
+      }
+      const lib = await readTemplateLibrary(dir, templatesPut[1]);
+      const tpl = lib.templates.find((t) => t.id === templatesPut[2]);
+      if (!tpl) {
+        json(res, 404, { error: "模版不存在" });
+        return;
+      }
+      if (patch.name !== undefined) tpl.name = patch.name;
+      if (patch.description !== undefined) tpl.description = patch.description;
+      if (patch.fields !== undefined) tpl.fields = patch.fields;
+      if (patch.page !== undefined) tpl.page = patch.page;
+      tpl.updatedAt = new Date().toISOString();
+      await writeTemplateLibrary(dir, lib);
+      json(res, 200, { ok: true, template: tpl });
+      return;
+    }
+
+    // DELETE /api/sites/:id/templates/:tid —— 删模版（有实例引用时拒绝）
+    const templatesDel = path.match(/^\/api\/sites\/([^/]+)\/templates\/([^/]+)$/);
+    if (req.method === "DELETE" && templatesDel) {
+      if (!requirePerm("content.edit")) return;
+      const dir = siteDir(templatesDel[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const lib = await readTemplateLibrary(dir, templatesDel[1]);
+      const idx = lib.templates.findIndex((t) => t.id === templatesDel[2]);
+      if (idx < 0) {
+        json(res, 404, { error: "模版不存在" });
+        return;
+      }
+      const used = lib.instances.filter((i) => i.templateId === templatesDel[2]).length;
+      if (used > 0) {
+        json(res, 409, {
+          error: `还有 ${used} 个实例在用这个模版 —— 先删实例或先转走`,
+        });
+        return;
+      }
+      lib.templates.splice(idx, 1);
+      await writeTemplateLibrary(dir, lib);
+      json(res, 200, { ok: true });
+      return;
+    }
+
+    // POST /api/sites/:id/template-instances —— 新建实例
+    const insPost = path.match(/^\/api\/sites\/([^/]+)\/template-instances$/);
+    if (req.method === "POST" && insPost) {
+      if (!requirePerm("content.edit")) return;
+      const dir = siteDir(insPost[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const body = await readBody(req);
+      let payload: {
+        templateId?: string;
+        name?: string;
+        slug?: string;
+        values?: TemplateInstance["values"];
+        published?: boolean;
+      };
+      try {
+        payload = JSON.parse(body) as typeof payload;
+      } catch {
+        json(res, 400, { error: "请求不是合法 JSON" });
+        return;
+      }
+      const lib = await readTemplateLibrary(dir, insPost[1]);
+      const tpl = lib.templates.find((t) => t.id === payload.templateId);
+      if (!tpl) {
+        json(res, 400, { error: "模版不存在" });
+        return;
+      }
+      const now = new Date().toISOString();
+      const ins: TemplateInstance = {
+        id: newInstanceId(),
+        templateId: tpl.id,
+        name: payload.name?.trim() || "未命名实例",
+        slug: payload.slug?.trim() || `ins-${Math.random().toString(36).slice(2, 8)}`,
+        values: payload.values ?? {},
+        published: payload.published ?? false,
+        order: Math.max(0, ...lib.instances.map((i) => i.order ?? 0)) + 1,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const problems = validateInstance(tpl, ins).filter((p) => !p.includes("必填"));
+      // 新建时只挡结构性错误（slug 等），必填留白允许 —— 内容可以慢慢填
+      if (problems.length) {
+        json(res, 400, { error: problems.join("；") });
+        return;
+      }
+      lib.instances.push(ins);
+      await writeTemplateLibrary(dir, lib);
+      json(res, 200, { ok: true, instance: ins });
+      return;
+    }
+
+    // PUT /api/sites/:id/template-instances/:iid —— 改实例（含重新生成页面）
+    const insPut = path.match(/^\/api\/sites\/([^/]+)\/template-instances\/([^/]+)$/);
+    if (req.method === "PUT" && insPut) {
+      if (!requirePerm("content.edit")) return;
+      const dir = siteDir(insPut[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const body = await readBody(req);
+      let patch: Partial<TemplateInstance>;
+      try {
+        patch = JSON.parse(body) as Partial<TemplateInstance>;
+      } catch {
+        json(res, 400, { error: "请求不是合法 JSON" });
+        return;
+      }
+      const lib = await readTemplateLibrary(dir, insPut[1]);
+      const ins = lib.instances.find((i) => i.id === insPut[2]);
+      if (!ins) {
+        json(res, 404, { error: "实例不存在" });
+        return;
+      }
+      const tpl = lib.templates.find((t) => t.id === ins.templateId);
+      if (patch.name !== undefined) ins.name = patch.name;
+      if (patch.slug !== undefined) ins.slug = patch.slug;
+      if (patch.values !== undefined) ins.values = patch.values;
+      if (patch.published !== undefined) ins.published = patch.published;
+      if (patch.order !== undefined) ins.order = patch.order;
+      ins.updatedAt = new Date().toISOString();
+
+      // 内容校验 —— 已发布实例必须完整，草稿允许留白
+      if (tpl && ins.published) {
+        const problems = validateInstance(tpl, ins);
+        if (problems.length) {
+          json(res, 400, { error: `发布前还有问题：${problems.join("；")}`, problems });
+          return;
+        }
+      }
+
+      await writeTemplateLibrary(dir, lib);
+
+      // 已生成过页面的实例：内容变了，生成的页面跟着更新（实例是唯一事实源）
+      let regenerated = 0;
+      if (ins.generatedPageId) {
+        try {
+          regenerated = await syncGeneratedPages(dir, insPut[1]);
+        } catch {
+          /* 编排写失败不挡实例保存 —— 页面下次发布时再同步 */
+        }
+      }
+      json(res, 200, { ok: true, instance: ins, regenerated });
+      return;
+    }
+
+    // DELETE /api/sites/:id/template-instances/:iid —— 删实例（连生成页一起摘）
+    const insDel = path.match(/^\/api\/sites\/([^/]+)\/template-instances\/([^/]+)$/);
+    if (req.method === "DELETE" && insDel) {
+      if (!requirePerm("content.edit")) return;
+      const dir = siteDir(insDel[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const lib = await readTemplateLibrary(dir, insDel[1]);
+      const idx = lib.instances.findIndex((i) => i.id === insDel[2]);
+      if (idx < 0) {
+        json(res, 404, { error: "实例不存在" });
+        return;
+      }
+      lib.instances.splice(idx, 1);
+      await writeTemplateLibrary(dir, lib);
+      // 同步编排：摘掉已删除实例的生成页
+      try {
+        await syncGeneratedPages(dir, insDel[1]);
+      } catch {
+        /* 编排写失败不挡删除 —— 下次发布时自然同步 */
+      }
+      json(res, 200, { ok: true });
+      return;
+    }
+
+    // POST /api/sites/:id/template-instances/:iid/generate —— 立即生成页面进编排
+    const insGen = path.match(/^\/api\/sites\/([^/]+)\/template-instances\/([^/]+)\/generate$/);
+    if (req.method === "POST" && insGen) {
+      if (!requirePerm("content.edit")) return;
+      const dir = siteDir(insGen[1]);
+      if (!dir) {
+        json(res, 400, { error: "站点 id 非法" });
+        return;
+      }
+      const lib = await readTemplateLibrary(dir, insGen[1]);
+      const ins = lib.instances.find((i) => i.id === insGen[2]);
+      if (!ins) {
+        json(res, 404, { error: "实例不存在" });
+        return;
+      }
+      const tpl = lib.templates.find((t) => t.id === ins.templateId);
+      if (tpl && ins.published) {
+        const problems = validateInstance(tpl, ins);
+        if (problems.length) {
+          json(res, 400, { error: `内容还没填完整：${problems.join("；")}`, problems });
+          return;
+        }
+      }
+      // 标记生成目标（首次生成时记下页面 id，之后重复生成是更新）
+      ins.generatedPageId = ins.generatedPageId ?? `pg_${ins.slug.replace(/[^a-zA-Z0-9]/g, "-")}`;
+      ins.updatedAt = new Date().toISOString();
+      await writeTemplateLibrary(dir, lib);
+      const generated = await syncGeneratedPages(dir, insGen[1]);
+      const { instancePath } = await import("@geokit/geo-kit");
+      json(res, 200, {
+        ok: true,
+        path: tpl ? instancePath(tpl, ins) : null,
+        generated,
+        hint: "页面已写进编排 —— 去「发布」上线",
+      });
       return;
     }
 

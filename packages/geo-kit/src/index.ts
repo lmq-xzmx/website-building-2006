@@ -464,3 +464,35 @@ export {
   type SearchResult,
   type SearchResultSegment,
 } from "./search.js";
+
+// ── 内容模版（模版定结构，实例填内容，生成前台页面）────────
+
+export type {
+  ContentTemplate,
+  TemplateField,
+  TemplateFieldType,
+  TemplateBlock,
+  TemplateInstance,
+  TemplateLibrary,
+  TemplateValue,
+} from "./templates/types.js";
+
+export {
+  emptyTemplateLibrary,
+  newTemplateId,
+  newInstanceId,
+  instancePath,
+  validateInstance,
+} from "./templates/types.js";
+
+export {
+  readTemplateLibrary,
+  writeTemplateLibrary,
+  templatesPath,
+  TEMPLATES_FILENAME,
+} from "./templates/store.js";
+
+export {
+  materializeInstance,
+  generateTemplatePages,
+} from "./templates/materialize.js";
