@@ -94,6 +94,12 @@ RUN cd /srv/app/apps/admin \
 
 COPY --from=builder /app/apps/admin/src apps/admin/src
 COPY --from=builder /app/apps/admin/dist apps/admin/dist
+# 后台控制台的静态资源（ES 模块 + CSS）——
+# ⚠️ 漏了这份，生产上登录后台是一片空白：
+#   server.ts 按**自身位置**算 CONSOLE_DIR = ../public/console/，
+#   镜像里没有这个目录 → /console/app.js 404 → 整个 SPA 都不加载。
+#   tsc 只编译 TS，不会把 public/ 带进 dist/，所以必须显式拷。
+COPY --from=builder /app/apps/admin/public apps/admin/public
 
 # 站点目录 —— 后台要写 plan.json
 # 只拷 demo-saas 一个站（sites/ 下每个站都带 node_modules 与 out，
