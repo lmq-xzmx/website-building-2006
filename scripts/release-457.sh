@@ -23,6 +23,43 @@ SECRETS=${SECRETS:-/data/secrets/wb.env}
 SITES_DIR=${SITES_DIR:-/data/website-building/sites}
 IMAGE="$REG/website-building"
 
+# ── 拉代码 + 自更新 ──────────────────────────────────────
+#
+# 为什么这一段要这么绕：
+#   发布前要用 `git merge --ff-only` 把仓库更新到最新，
+#   而**这个脚本自己就在仓库里**。sh 是逐行读脚本文件的，
+#   文件被改写后，后面要读的行号就错位了 ——
+#   实测：加了「同步素材」那几行后，日志里那几行被整段跳过，
+#   同步静默失败，发布"成功"但产物是旧的。
+#
+#   而且顺序不能反：副本必须在 **merge 之后**复制 ——
+#   先复制的话副本里还是旧版，新逻辑照样不跑。
+#
+# 所以：先拉代码（会改写仓库里的脚本），再把**最新版**复制到临时路径，
+# 用副本跑完剩下的步骤。副本在 /tmp，git 改不到它。
+if [ -z "${WB_RELEASE_REEXEC:-}" ]; then
+  export WB_RELEASE_REEXEC=1
+  echo "════ 0. 拉代码（只快进）════"
+  cd "$SRC"
+  if [ -d .git ]; then
+    git fetch origin main
+    # 有本地改动就不动 —— 不丢别人的东西
+    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+      echo "  ⚠️ 工作区有未提交改动，跳过拉取（用现有代码构建）"
+      git status --short | head -5
+    else
+      git merge --ff-only origin/main
+      echo "  已同步到 $(git rev-parse --short HEAD)"
+    fi
+  else
+    echo "  ⚠️ $SRC 不是 git 仓库，跳过拉取（用现有代码构建）"
+  fi
+  SELF="$(mktemp /tmp/wb-release-XXXXXX.sh)"
+  cp "$0" "$SELF"
+  chmod +x "$SELF"
+  exec sh "$SELF" "$@"
+fi
+
 echo "════ 1. 平台自检 ════"
 ARCH="$(uname -m)"
 if [ "$ARCH" != "x86_64" ]; then
@@ -31,22 +68,9 @@ if [ "$ARCH" != "x86_64" ]; then
 fi
 echo "  $ARCH ✓"
 
-echo "════ 2. 拉代码（只快进）════"
-cd "$SRC"
-if [ -d .git ]; then
-  git fetch origin main
-  # 有本地改动就不动 —— 不丢别人的东西
-  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-    echo "  ⚠️ 工作区有未提交改动，跳过拉取（用现有代码构建）"
-    git status --short | head -5
-  else
-    git merge --ff-only origin/main
-    echo "  已同步到 $(git rev-parse --short HEAD)"
-  fi
-else
-  echo "  ⚠️ $SRC 不是 git 仓库，跳过拉取（用现有代码构建）"
-fi
+echo "════ 2. 当前版本 ════"
 TAG=$(cd "$SRC" && git rev-parse --short HEAD 2>/dev/null || echo manual)
+echo "  $TAG"
 
 echo "════ 3. 同步宿主编排产物 ════"
 # 后台写的编排产物在宿主卷里，不在源码目录 —— 不同步进构建上下文，
