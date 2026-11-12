@@ -198,6 +198,13 @@ svg { display: block; }
   max-width: 260px;
 }
 .site-switch:hover { border-color: var(--rule-strong); }
+/* 只有一个站点时它是只读标识 —— 不该看起来像能点 */
+.site-switch--static {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+}
+.site-switch--static:hover { border-color: transparent; }
 .site-switch__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); flex: none; }
 .site-switch__name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .site-switch__id { font: var(--fs-11)/1 var(--font-mono); color: var(--ink-3); }

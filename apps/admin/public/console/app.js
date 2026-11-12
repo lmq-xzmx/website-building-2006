@@ -242,19 +242,34 @@ function updateTopbar() {
 
   mount(
     topbarEl,
-    h(
-      "button",
-      {
-        class: "site-switch",
-        type: "button",
-        "aria-label": "切换站点",
-        onclick: (e) => siteMenu(e.currentTarget),
-      },
-      h("span", { class: "site-switch__dot" }),
-      h("span", { class: "site-switch__name", text: site?.name ?? "未选站点" }),
-      h("span", { class: "site-switch__id", text: site?.id ?? "" }),
-      icon("chevronDown", 13),
-    ),
+    // 站点切换 —— **只有一个站点时不做成按钮**。
+    //
+    // 为什么：切换菜单里就一条、还是当前站点，点了等于没点 ——
+    // 一个点不动的按钮比没有更让人困惑（会以为后台坏了）。
+    // 这跟「发布口径统一」是同一条道理：没有第二个对象时，
+    // 那个控件就不该存在。此时它退化成只读的站点标识。
+    store.state.sites.length > 1
+      ? h(
+          "button",
+          {
+            class: "site-switch",
+            type: "button",
+            "aria-label": "切换站点",
+            title: `在 ${store.state.sites.length} 个站点之间切换`,
+            onclick: (e) => siteMenu(e.currentTarget),
+          },
+          h("span", { class: "site-switch__dot" }),
+          h("span", { class: "site-switch__name", text: site?.name ?? "未选站点" }),
+          h("span", { class: "site-switch__id", text: site?.id ?? "" }),
+          icon("chevronDown", 13),
+        )
+      : h(
+          "span",
+          { class: "site-switch site-switch--static", title: "当前站点（只有一个站点时不可切换）" },
+          h("span", { class: "site-switch__dot" }),
+          h("span", { class: "site-switch__name", text: site?.name ?? "未选站点" }),
+          h("span", { class: "site-switch__id", text: site?.id ?? "" }),
+        ),
     h(
       "div",
       { class: "crumb" },

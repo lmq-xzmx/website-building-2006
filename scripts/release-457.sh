@@ -65,6 +65,16 @@ for site in "$SITES_DIR"/*/; do
   done
   cp "$site/plan.json" "$SRC/sites/$name/plan.json" 2>/dev/null || true
   cp "$site/modules.json" "$SRC/sites/$name/modules.json" 2>/dev/null || true
+  # 素材也要带 —— 后台上传的图落在宿主卷的 public/media/，
+  # 不同步的话构建产物里没有 media/ 目录，
+  # 发布后的前台引用 /media/<file> 就是 404（后台缩略图却能显示，
+  # 因为那条走后端接口 —— 两边表现不一致，很难查）。
+  if [ -d "$site/public/media" ]; then
+    mkdir -p "$SRC/sites/$name/public/media"
+    cp -r "$site/public/media/." "$SRC/sites/$name/public/media/" 2>/dev/null || true
+    n=$(ls -1 "$SRC/sites/$name/public/media" 2>/dev/null | wc -l | tr -d ' ')
+    [ "$n" != "0" ] && brought="$brought 素材${n}个"
+  fi
   if [ -n "$brought" ]; then
     echo "  $name: 已带入$brought"
   else
