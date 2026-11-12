@@ -918,7 +918,9 @@ export function create(ctx) {
     if (t === "rich-text" || t === "hero" || t === "faq") {
       if (item.source === "manual") {
         form.append(
-          field(
+          // 用 fieldBox 不用 field —— 富文本的工具栏按钮会被 <label> 当成
+          // labeled control，点正文时焦点被抢走，一个字都打不进去。
+          fieldBox(
             "正文",
             richEditor({
               value: item.body,
@@ -1724,9 +1726,41 @@ export function create(ctx) {
   }
 
   /* ── 小工具 ───────────────────────────────────────────── */
+
+  /**
+   * 一个字段 —— 用 `<label>` 包。
+   *
+   * 适合 input / textarea / select 这些**本身可被 label 关联**的控件：
+   * 点字段名就能把光标放进输入框。
+   */
   function field(label, control, hint) {
     return h(
       "label",
+      { class: "field", dataset: { field: label } },
+      h("span", { class: "field__label" }, h("span", { text: label })),
+      control,
+      hint ? h("span", { class: "form-note", text: hint }) : null,
+    );
+  }
+
+  /**
+   * 一个字段 —— 用 `<div>` 包。
+   *
+   * 为什么富文本编辑器不能用 `field()`：
+   *   `<label>` 的激活行为会把点击**转给它的 labeled control** ——
+   *   也就是树序里的第一个可 label 元素。
+   *   富文本编辑器的工具栏里全是 `<button>`（button 是可 label 元素），
+   *   于是「正文」这个 label 的 control 变成了第一颗工具栏按钮，
+   *   而不是正文编辑区。点正文 → 浏览器把点击转发给按钮 →
+   *   正文区永远拿不到焦点 → **一个字都打不进去**。
+   *
+   *   实测（label.control）：正文 → BUTTON.rte__btn。
+   *
+   * 语义上也对：编辑区不是表单控件，本来就不该被 label 关联。
+   */
+  function fieldBox(label, control, hint) {
+    return h(
+      "div",
       { class: "field", dataset: { field: label } },
       h("span", { class: "field__label" }, h("span", { text: label })),
       control,

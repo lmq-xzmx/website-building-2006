@@ -26,6 +26,8 @@ export function create() {
   let instances = [];
   let selectedTpl = null; // 当前查看的模版
   let selectedIns = null; // 当前编辑的实例
+  /** 批量勾选的实例 id —— 「选中这些案例后批量处理」 */
+  const picked = new Set();
   let loading = true;
   let error = "";
 
@@ -91,15 +93,59 @@ export function create() {
     ),
   );
 
-  mount(
-    head,
-    h(
+  paintHead();
+
+  /** 批量操作条（没勾选就不显示） */
+  function batchBar() {
+    if (!picked.size) return null;
+    const list = instances.filter((i) => picked.has(i.id));
+    return h(
       "div",
-      { class: "work__title" },
-      h("h1", { text: "内容模版" }),
-      h("p", { text: "模版定结构，实例填内容。实例可以直接生成前台页面。" }),
-    ),
-  );
+      { class: "hstack gap8", style: { flexWrap: "wrap" } },
+      h("span", { class: "tag tag--frag", text: `已选 ${picked.size} 个实例` }),
+      h("button", {
+        class: "btn btn--sm",
+        type: "button",
+        title: "反查这些实例生成的页面结构（模块 · 条目）",
+        onclick: () => openStructure(list),
+      }, icon("layers", 14), "查看站点结构"),
+      h("button", {
+        class: "btn btn--ghost btn--sm",
+        type: "button",
+        title: "按各自草稿重新生成前台页面",
+        onclick: () => void batchGenerate(list),
+      }, icon("refresh", 14), "批量生成"),
+      h("button", {
+        class: "btn btn--stamp btn--sm",
+        type: "button",
+        title: "删除选中的实例（它们生成的页面也会摘掉）",
+        onclick: () => void batchRemove(list),
+      }, icon("trash", 14), "批量删除"),
+      h("button", {
+        class: "btn btn--ghost btn--sm",
+        type: "button",
+        text: "取消选择",
+        onclick: () => {
+          picked.clear();
+          paintList();
+          paintHead();
+        },
+      }),
+    );
+  }
+
+  function paintHead() {
+    mount(
+      head,
+      h(
+        "div",
+        { class: "work__title" },
+        h("h1", { text: "内容模版" }),
+        h("p", { text: "模版定结构，实例填内容。实例可以直接生成前台页面。" }),
+      ),
+      h("div", { class: "work__actions" }, batchBar()),
+    );
+  }
 
   /* ── 数据 ─────────────────────────────────────────────── */
 
@@ -200,6 +246,20 @@ export function create() {
                 paintDetail();
               },
             },
+            // 勾选框 —— 批量操作（看结构 / 批量生成 / 批量删）
+            h("input", {
+              type: "checkbox",
+              checked: picked.has(i.id) ? "" : null,
+              "aria-label": `选中 ${i.name}`,
+              title: "勾选后可批量查看结构、生成或删除",
+              onclick: (e) => {
+                e.stopPropagation();
+                if (e.target.checked) picked.add(i.id);
+                else picked.delete(i.id);
+                paintList();
+                paintHead();
+              },
+            }),
             h("span", { class: "stack", style: { gap: "2px", minWidth: "0", flex: "1" } },
               h("span", { class: "tree__title", text: i.name }),
               h("span", { class: "hstack gap6" },
@@ -211,6 +271,17 @@ export function create() {
                   : h("span", { class: "tree__path", text: "未生成页面" }),
               ),
             ),
+            // 单个实例就能反查结构 —— 不用先勾选
+            h("button", {
+              class: "btn btn--ghost btn--icon btn--sm",
+              type: "button",
+              title: "查看这个实例生成的站点结构",
+              "aria-label": `查看 ${i.name} 的站点结构`,
+              onclick: (e) => {
+                e.stopPropagation();
+                openStructure([i]);
+              },
+            }, icon("layers", 13)),
           ),
         );
       }
@@ -532,6 +603,14 @@ export function create() {
             title: "按当前内容渲染这个页面（草稿预览，未发布也看得到）",
             onclick: () => showInstancePreview(ins),
           }),
+          h("button", {
+            id: "btn-instance-structure",
+            class: "btn btn--ghost btn--sm",
+            type: "button",
+            text: "站点结构",
+            title: "反查这个实例生成的页面结构（模块 · 条目）",
+            onclick: () => openStructure([ins]),
+          }),
           ins.generatedPageId
             ? h("button", {
                 id: "btn-instance-regenerate",
@@ -688,6 +767,247 @@ export function create() {
       toast(`页面已生成：${d.path} —— 去「发布」上线`, { kind: "ok", timeout: 5000 });
     } catch (e) {
       toast(e instanceof ApiError ? e.message : String(e), { kind: "err", timeout: 6000 });
+    }
+  }
+
+  /* ── 站点结构反查 ─────────────────────────────────────── */
+
+  /**
+   * 实例 → 它生成的页面 → 模块 → 条目。
+   *
+   * 为什么需要这条反向链路：
+   *   模版视图是「按模版看内容」，内容区是「按页面看内容」——
+   *   两边都看不到对方。改了模版的字段，到底生成了什么结构？
+   *   只能靠猜。
+   *
+   *   数据是现成的：实例带 generatedPageId，页面在 plan.pages 里，
+   *   条目用 store.itemsOf() 展开（片段引用会展开成本地看到的样子）。
+   */
+  function instanceStructure(ins) {
+    const page = store.pages().find((p) => p.id === ins.generatedPageId) ?? null;
+    if (!page) return null;
+    return {
+      page,
+      modules: (page.modules ?? []).map((m) => ({
+        mod: m,
+        items: store.itemsOf(m),
+      })),
+    };
+  }
+
+  /** 跳到内容区并选中某个模块（反查的终点是「能直接改」） */
+  function gotoModule(pageId, moduleId) {
+    store.select({ pageId, moduleId });
+    location.hash = "#/content";
+  }
+
+  /**
+   * 一个模块的条目 —— 带**来源**与**内容摘要**。
+   *
+   * 为什么不用 store.itemsOf() 就完事：
+   *   1. itemsOf 不告诉你这条是「片段本体」「本地追加」还是普通条目 ——
+   *      而这恰恰是引用型模块最要紧的区别；
+   *   2. 只看标题等于没看到内容 —— 案例的正文、FAQ 的答案都在正文里，
+   *      反查却只显示「挑战」两个字，看不出生成的是什么。
+   */
+  function moduleItems(mod) {
+    const out = [];
+    if (mod.fragmentId) {
+      for (const e of store.fragmentEntries(mod)) {
+        const it = store.effectiveItem(e);
+        out.push({
+          tags: [e.origin === "local" ? "本地" : "片段", ...(it.source === "kb" ? ["知识库"] : [])],
+          title: e.label || it.title || "无标题条目",
+          snippet: contentSnippet(it),
+        });
+      }
+      return out;
+    }
+    for (const it of mod.items ?? []) {
+      out.push({
+        tags: [it.source === "kb" ? "知识库" : "手写"],
+        title: it.title || it.question || it.label || "无标题条目",
+        snippet: contentSnippet(it),
+      });
+    }
+    return out;
+  }
+
+  /** 条目里真正有信息量的那段（正文 / 答案 / 数值 / 链接） */
+  function contentSnippet(it) {
+    const raw = it.summary || it.body || it.answer || it.value || it.href || it.client || "";
+    const clean = (s) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+    if (raw && typeof raw === "object") return clean(extractDocText(raw));
+    const s = String(raw ?? "");
+    if (s.trim().startsWith("{")) {
+      // 富文本是 ProseMirror JSON —— 取里面的文字
+      const t = extractDocText(s);
+      if (t) return clean(t);
+    }
+    return clean(s);
+  }
+
+  /** 从 ProseMirror JSON 里抽出纯文本 */
+  function extractDocText(json) {
+    try {
+      const doc = typeof json === "string" ? JSON.parse(json) : json;
+      const out = [];
+      const walk = (n) => {
+        if (!n) return;
+        if (Array.isArray(n)) return n.forEach(walk);
+        if (typeof n === "object") {
+          if (typeof n.text === "string") out.push(n.text);
+          if (n.content) walk(n.content);
+        }
+      };
+      walk(doc);
+      return out.join(" ");
+    } catch {
+      return "";
+    }
+  }
+
+  /** 反查抽屉：把选中的实例逐个展开成「页面 → 模块 → 条目」 */
+  function openStructure(list) {
+    const body = h("div", { class: "stack gap14" });
+
+    const panel = drawer({
+      title: "站点结构反查",
+      subtitle: "实例 → 生成的页面 → 模块 → 条目。点模块跳到内容区直接改。",
+      body,
+      width: "640px",
+    });
+
+    const blocks = list.map((ins) => {
+      const st = instanceStructure(ins);
+      const head = h(
+        "div",
+        { class: "hstack gap8", style: { flexWrap: "wrap" } },
+        h("b", { style: { fontSize: "13.5px" }, text: ins.name }),
+        h("span", { class: "tag", style: { height: "15px" }, text: ins.published ? "已发布" : "草稿" }),
+        h("span", { class: "sp" }),
+        h("code", {
+          class: "url-chip",
+          text: insUrl(ins) || "—",
+          title: "点击复制网址",
+          onclick: () => void copyUrl(insUrl(ins)),
+        }),
+      );
+
+      if (!st) {
+        return h(
+          "div",
+          { class: "stack gap6" },
+          head,
+          h("div", { class: "muted", style: { fontSize: "12px" }, text: "这个实例还没生成页面 —— 先点「生成前台页面」。" }),
+        );
+      }
+
+      const modRows = st.modules.map(({ mod, items }) =>
+        h(
+          "div",
+          {
+            class: "tree__node",
+            style: { cursor: "pointer" },
+            title: "跳到内容区选中这一块",
+            onclick: () => gotoModule(st.page.id, mod.id),
+          },
+          h("span", { class: "tree__title", text: mod.title || store.MODULE_TYPE_LABEL?.[mod.type] || mod.type }),
+          h("span", { class: "tree__path", text: `${mod.type} · ${items.length} 条` }),
+        ),
+      );
+
+      const itemRows = st.modules.flatMap(({ mod }) =>
+        moduleItems(mod).map((it) =>
+          h(
+            "div",
+            { class: "item", style: { paddingLeft: "26px", alignItems: "flex-start" } },
+            ...it.tags.map((t) => h("span", { class: "tag", style: { height: "15px" }, text: t })),
+            h(
+              "span",
+              { class: "stack", style: { gap: "1px", minWidth: "0" } },
+              h("span", { class: "item__t", text: it.title }),
+              it.snippet ? h("span", { class: "muted", style: { fontSize: "11px" }, text: it.snippet }) : null,
+            ),
+          ),
+        ),
+      );
+
+      return h(
+        "div",
+        { class: "stack gap6" },
+        head,
+        h(
+          "div",
+          { class: "muted", style: { fontSize: "11.5px" } },
+          `页面：${st.page.title}（${st.page.path || "/"}）· ${st.modules.length} 块`,
+        ),
+        h("div", { class: "tree" }, ...modRows),
+        h("div", { class: "stack gap4" }, ...itemRows),
+      );
+    });
+
+    mount(
+      body,
+      ...(blocks.length ? blocks : [empty({ title: "没有选中任何实例", mark: "file" })]),
+    );
+    return panel;
+  }
+
+  /* ── 批量操作 ─────────────────────────────────────────── */
+
+  /** 批量生成：逐个实例重新生成页面（失败的记下来，不中断其余） */
+  async function batchGenerate(list) {
+    if (!list.length) return;
+    let ok = 0;
+    const bad = [];
+    for (const ins of list) {
+      try {
+        await api.generateInstance(siteId, ins.id);
+        ok++;
+      } catch (e) {
+        bad.push(`${ins.name}：${e instanceof ApiError ? e.message : String(e)}`);
+      }
+    }
+    await load();
+    paintList();
+    paintHead();
+    paintDetail();
+    if (bad.length) {
+      toast(`生成 ${ok}/${list.length} 个成功；失败：${bad.join("；")}`, { kind: "err", timeout: 8000 });
+    } else {
+      toast(`已生成 ${ok} 个实例的页面 —— 去「发布」上线`, { kind: "ok", timeout: 5000 });
+    }
+  }
+
+  /** 批量删除：实例与它们生成的页面一起摘掉 */
+  async function batchRemove(list) {
+    if (!list.length) return;
+    const ok = await askConfirm(
+      "批量删除实例",
+      `要删掉 ${list.length} 个实例（${list.map((i) => i.name).join("、")}）吗？它们生成的页面也会一起摘掉。`,
+      true,
+    );
+    if (!ok) return;
+    let done = 0;
+    const bad = [];
+    for (const ins of list) {
+      try {
+        await api.delInstance(siteId, ins.id);
+        picked.delete(ins.id);
+        done++;
+      } catch (e) {
+        bad.push(`${ins.name}：${e instanceof ApiError ? e.message : String(e)}`);
+      }
+    }
+    await load();
+    paintList();
+    paintHead();
+    paintDetail();
+    if (bad.length) {
+      toast(`删掉 ${done}/${list.length} 个；失败：${bad.join("；")}`, { kind: "err", timeout: 8000 });
+    } else {
+      toast(`已删除 ${done} 个实例`, { kind: "ok" });
     }
   }
 
